@@ -366,11 +366,10 @@ Devuelve array JSON:
   }
 });
 
-// ─── START ────────────────────────────────────────────────────────────────────
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`StreamVoice running on http://localhost:${PORT}`);
-});
+// ─── EXPORT (Vercel serverless) ─────────────────────────────────────────────
+// En Vercel se exporta la app directamente.
+// Para desarrollo local: descomenta las 2 lineas de abajo y ejecuta `node api/index.js`
+// const PORT = process.env.PORT || 3000;
+// app.listen(PORT, () => console.log(`StreamVoice en http://localhost:${PORT}`));
 
 module.exports = app;
