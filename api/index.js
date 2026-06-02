@@ -343,23 +343,33 @@ app.post('/api/search-topics', async (req, res) => {
     'anthropic-version': '2023-06-01',
     'Content-Type': 'application/json'
   };
-  const userPrompt = `Genera las 5 tendencias o temas más relevantes y actuales sobre: ${sector}.
+  const now = new Date().toISOString();
+  const userPrompt = `Genera SOLO tendencias o noticias MUY RECIENTES (de las últimas 24 horas) sobre: ${sector}.
+Fecha y hora actual de referencia: ${now}.
+REGLAS ESTRICTAS:
+- Solo incluye temas con engagement "hot" (muy caliente) o "trending" (en tendencia). NO incluyas temas "rising" ni de bajo engagement.
+- Solo noticias o conversaciones de las últimas 24 horas. Descarta cualquier cosa más antigua.
+- Devuelve entre 3 y 6 temas (los que realmente cumplan el criterio, no rellenes).
 Devuelve SOLO un array JSON (sin backticks, sin texto extra):
-[{"title":"titular en español max 13 palabras","why":"por qué importa ahora (1 frase)","engagement":"hot|trending|rising","platform":"x|linkedin|web|mixed","eng_reactions":"ej: 8.2k likes","eng_comments":"ej: 1.4k comentarios","tags":["tag1","tag2","tag3"],"angle":"ángulo de opinión para un directivo de Paramount (1 frase)"}]`;
+[{"title":"titular en español max 13 palabras","why":"por qué importa ahora (1 frase)","engagement":"hot|trending","platform":"x|linkedin|web|mixed","eng_reactions":"ej: 8.2k likes","eng_comments":"ej: 1.4k comentarios","tags":["tag1","tag2","tag3"],"angle":"ángulo de opinión para un directivo de Paramount (1 frase)","published":"fecha y hora aprox de la noticia, ej: 'Hoy 09:30' o '2026-06-02 14:00'","url":"enlace directo a la fuente/noticia original (URL real y completa)"}]`;
 
-  // INTENTO 1: con búsqueda web (temas reales y actuales)
+  // INTENTO 1: con búsqueda web (temas reales y actuales de las últimas 24h)
   try {
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-sonnet-4-6',
-      max_tokens: 1500,
-      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
-      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas tendencias actuales y reales. Respondes SOLO con JSON válido, sin backticks.',
-      messages: [{ role: 'user', content: `Busca en internet y luego ${userPrompt}` }]
-    }, { headers, timeout: 55000 });
+      max_tokens: 2000,
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas noticias y tendencias REALES de las últimas 24 horas, con su enlace original. Respondes SOLO con JSON válido, sin backticks.',
+      messages: [{ role: 'user', content: `Busca en internet noticias de las últimas 24 horas y luego ${userPrompt}` }]
+    }, { headers, timeout: 60000 });
 
     const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
     const match = text.match(/\[[\s\S]*\]/);
-    if (match) return res.json(JSON.parse(match[0]));
+    if (match) {
+      let topics = JSON.parse(match[0]);
+      topics = topics.filter(t => t.engagement === 'hot' || t.engagement === 'trending');
+      return res.json({ topics, searchedAt: now, source: 'web' });
+    }
     throw new Error('No JSON in web search response');
   } catch (webErr) {
     console.error('Web search failed, trying fallback:', webErr.response?.data || webErr.message);
@@ -368,14 +378,18 @@ Devuelve SOLO un array JSON (sin backticks, sin texto extra):
     try {
       const response = await axios.post('https://api.anthropic.com/v1/messages', {
         model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
-        system: 'Eres un editor de contenido senior del sector audiovisual y streaming, con conocimiento profundo de las tendencias del sector. Respondes SOLO con JSON válido, sin backticks.',
+        max_tokens: 2000,
+        system: 'Eres un editor de contenido senior del sector audiovisual y streaming. Respondes SOLO con JSON válido, sin backticks.',
         messages: [{ role: 'user', content: userPrompt }]
       }, { headers, timeout: 30000 });
 
       const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
       const match = text.match(/\[[\s\S]*\]/);
-      if (match) return res.json(JSON.parse(match[0]));
+      if (match) {
+        let topics = JSON.parse(match[0]);
+        topics = topics.filter(t => t.engagement === 'hot' || t.engagement === 'trending');
+        return res.json({ topics, searchedAt: now, source: 'ai' });
+      }
       throw new Error('No JSON in fallback response');
     } catch (fallbackErr) {
       const detail = fallbackErr.response?.data?.error?.message || fallbackErr.message;
