@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StreamVoice — Borja Pérez Herraiz</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#07070f;--surface:#0f0f1a;--surface2:#161625;--surface3:#1d1d30;--border:#222235;--border2:#2e2e48;--accent:#e8c84a;--accent-dim:rgba(232,200,74,0.07);--accent-border:rgba(232,200,74,0.22);--accent2:#c44fff;--text:#eeeef8;--muted:#686888;--muted2:#454560;--red:#ff4f6d;--green:#3dffa0;--blue:#4fa8ff;--orange:#ff9f4a;--red-dim:rgba(255,79,109,0.10);--green-dim:rgba(61,255,160,0.10);--blue-dim:rgba(79,168,255,0.10);--orange-dim:rgba(255,159,74,0.10)}
+html,body{height:100%;overflow:hidden;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text)}
+::-webkit-scrollbar{width:3px;height:3px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+header{height:58px;background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.5rem;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:relative;z-index:10}
+.logo{display:flex;align-items:center;gap:12px}
+.logo-mark{width:32px;height:32px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#000;font-family:'Playfair Display',serif}
+.logo-name{font-family:'Playfair Display',serif;font-size:18px}.logo-name span{color:var(--accent)}
+.header-center{position:absolute;left:50%;transform:translateX(-50%);display:flex;gap:8px}
+.nav-tab{padding:5px 14px;border-radius:6px;font-size:12px;cursor:pointer;transition:all .2s;color:var(--muted);border:1px solid transparent}
+.nav-tab:hover{color:var(--text);background:var(--surface2)}.nav-tab.active{background:var(--surface2);border-color:var(--border2);color:var(--text)}
+.li-connect-btn{display:flex;align-items:center;gap:7px;background:#0a66c2;border:none;padding:7px 16px;border-radius:20px;font-size:12.5px;color:#fff;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500}
+.li-connect-btn:hover{background:#0958a8}
+.li-connected{display:flex;align-items:center;gap:6px;background:rgba(61,255,160,0.1);border:1px solid rgba(61,255,160,0.25);padding:5px 14px;border-radius:20px;font-size:12px;color:var(--green)}
+.li-dot{width:6px;height:6px;background:var(--green);border-radius:50%}
+.app{display:flex;flex-direction:column;height:100vh}
+.body{flex:1;display:grid;grid-template-columns:240px 1fr 370px;overflow:hidden;min-height:0}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sidebar-scroll{flex:1;overflow-y:auto;padding:1.25rem}
+.sidebar-footer{padding:1rem 1.25rem;border-top:1px solid var(--border)}
+.sec-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem;font-weight:500}
+.sector-list{display:flex;flex-direction:column;gap:3px;margin-bottom:1.25rem}
+.sector-tag{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;border:1px solid transparent;cursor:pointer;transition:all .18s;font-size:12.5px;color:var(--muted)}
+.sector-tag:hover{background:var(--surface2);color:var(--text);border-color:var(--border)}
+.sector-tag.active{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent)}
+.sector-tag .icon{font-size:14px}
+.profile-block{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px}
+.profile-block textarea{background:transparent;border:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;width:100%;outline:none;resize:none;line-height:1.6}
+.credit{font-size:11px;color:var(--muted2);text-align:center}.credit span{color:var(--muted)}
+.tab-view{display:none;flex:1;overflow-y:auto;padding:1.5rem;flex-direction:column;gap:1.1rem}.tab-view.active{display:flex}
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.btn{padding:8px 18px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif;font-size:12.5px;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--accent);color:#000;border-color:var(--accent);font-weight:600}.btn-primary:hover{background:#f0d46a}.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.search-wrap{flex:1;min-width:120px;max-width:240px;position:relative}
+.search-wrap input{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px 12px 8px 32px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;outline:none}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px}
+.topics-grid{display:flex;flex-direction:column;gap:9px}
+.topic-card{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:14px 16px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.topic-card:hover{border-color:var(--border2);transform:translateY(-1px)}
+.topic-card.selected{border-color:var(--accent-border);background:rgba(232,200,74,0.025)}
+.topic-stripe{position:absolute;top:0;left:0;right:0;height:2px;background:transparent}
+.topic-card.selected .topic-stripe{background:linear-gradient(90deg,var(--accent),transparent)}
+.topic-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:5px}
+.topic-title{font-size:13.5px;font-weight:500;line-height:1.4;flex:1}
+.ep{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:600;white-space:nowrap}
+.ep.hot{background:var(--red-dim);color:var(--red)}.ep.trending{background:var(--green-dim);color:var(--green)}.ep.rising{background:var(--blue-dim);color:var(--blue)}
+.topic-why{font-size:11.5px;color:var(--muted);margin-bottom:5px;line-height:1.5}
+.topic-angle{font-size:11.5px;color:rgba(232,200,74,0.65);font-style:italic;margin-bottom:9px;line-height:1.5}
+.topic-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tags{display:flex;gap:5px;flex-wrap:wrap;flex:1}
+.tag{padding:2px 8px;border-radius:5px;font-size:10.5px;background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+.platform-badge{display:flex;align-items:center;gap:4px;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600;border:1px solid}
+.pb-x{background:rgba(255,255,255,0.05);color:#bbb;border-color:rgba(255,255,255,0.1)}
+.pb-li{background:rgba(10,102,194,0.12);color:var(--blue);border-color:rgba(10,102,194,0.2)}
+.pb-web{background:var(--green-dim);color:var(--green);border-color:rgba(61,255,160,0.18)}
+.eng-stats{display:flex;gap:8px;font-size:10.5px;color:var(--muted);align-items:center;margin-top:5px}
+.eng-stat{display:flex;align-items:center;gap:3px}
+.gen-btn{padding:5px 14px;border-radius:6px;background:var(--accent);color:#000;border:none;font-family:'DM Sans',sans-serif;font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+.gen-btn:hover{background:#f0d46a}
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:260px;gap:12px;text-align:center}
+.empty-icon{font-size:38px;opacity:.18}.empty-text{color:var(--muted);font-size:13px;max-width:280px;line-height:1.6}
+.right-panel{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.right-scroll{flex:1;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:1.1rem}
+.right-footer{padding:1rem 1.25rem;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.tone-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.tone-btn{padding:7px 4px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-size:11px;cursor:pointer;text-align:center;transition:all .2s;font-family:'DM Sans',sans-serif;line-height:1.4}
+.tone-btn:hover{border-color:var(--border2);color:var(--text)}
+.tone-btn.active{border-color:var(--accent2);color:var(--accent2);background:rgba(196,79,255,0.08)}
+.length-row{display:flex;align-items:center;gap:10px}
+.length-slider{flex:1;-webkit-appearance:none;height:3px;border-radius:2px;background:var(--border2);outline:none;cursor:pointer}
+.length-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:pointer}
+.length-val{font-size:12px;font-weight:500;color:var(--accent);min-width:60px;text-align:right}
+.draft-area{flex:1;min-height:200px;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:14px;overflow-y:auto;max-height:300px}
+.draft-text{font-size:12.5px;line-height:1.75;white-space:pre-wrap;word-break:break-word}
+.draft-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:160px;gap:8px;text-align:center}
+.draft-placeholder-icon{font-size:26px;opacity:.2}.draft-placeholder-text{font-size:12px;color:var(--muted);max-width:200px;line-height:1.5}
+.char-row{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted)}
+.action-row{display:flex;gap:7px}
+.pub-btn{flex:1;background:#0a66c2;border:none;border-radius:7px;padding:10px;color:#fff;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-family:'DM Sans',sans-serif;font-weight:500}
+.pub-btn:hover{background:#0958a8}.pub-btn:disabled{opacity:.4;cursor:not-allowed}
+.copy-btn,.icon-btn{background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:10px 13px;color:var(--muted);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.copy-btn:hover,.icon-btn:hover{color:var(--text)}
+.loading-overlay{position:fixed;inset:0;background:rgba(7,7,15,0.82);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:100;backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .3s}
+.loading-overlay.show{opacity:1;pointer-events:all}
+.loading-spinner{width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+.loading-text{color:var(--muted);font-size:13px}
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(0,0,0,0.2);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.banner{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-size:12px;color:var(--muted);line-height:1.6}
+.banner b{color:var(--text)}
+.metric-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:8px}
+.metric-title{font-size:13px;font-weight:500;margin-bottom:8px}
+.metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.metric-stat{text-align:center}
+.metric-val{font-size:18px;font-weight:600;color:var(--accent);font-family:'Playfair Display',serif}
+.metric-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+.tip-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:8px}
+.tip-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.tip-title{font-size:13px;font-weight:500;flex:1}
+.tip-body{font-size:12px;color:var(--muted);line-height:1.6}
+.tip-priority{padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
+.tp-high{background:var(--red-dim);color:var(--red)}.tp-medium{background:var(--orange-dim);color:var(--orange)}.tp-low{background:var(--blue-dim);color:var(--blue)}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="logo"><div class="logo-mark">SV</div><div class="logo-name">Stream<span>Voice</span></div></div>
+  <div class="header-center">
+    <div class="nav-tab active" onclick="showTab('discover',this)">🔍 Descubrir</div>
+    <div class="nav-tab" onclick="showTab('metrics',this)">📊 Métricas</div>
+    <div class="nav-tab" onclick="showTab('tips',this)">💡 Mejora</div>
+  </div>
+  <div id="liStatus"><button class="li-connect-btn" onclick="connectLinkedIn()">🔗 Conectar LinkedIn</button></div>
+</header>
+<div class="body">
+  <div class="sidebar">
+    <div class="sidebar-scroll">
+      <div class="sec-label">Temáticas</div>
+      <div class="sector-list">
+        <div class="sector-tag active" onclick="setSector(this,'streaming SVOD Netflix Disney HBO 2026')"><span class="icon">📺</span>Streaming & SVOD</div>
+        <div class="sector-tag" onclick="setSector(this,'FAST channels free ad-supported TV 2026')"><span class="icon">📡</span>FAST & Free TV</div>
+        <div class="sector-tag" onclick="setSector(this,'operadores Pay TV cable cord-cutting 2026')"><span class="icon">🔌</span>Operadores</div>
+        <div class="sector-tag" onclick="setSector(this,'producción audiovisual contenidos distribución 2026')"><span class="icon">🎬</span>Contenido</div>
+        <div class="sector-tag" onclick="setSector(this,'CTV programmatic advertising monetización 2026')"><span class="icon">⚙️</span>Ad Tech & CTV</div>
+        <div class="sector-tag" onclick="setSector(this,'media deals partnerships distribución OTT 2026')"><span class="icon">🤝</span>Partnerships</div>
+      </div>
+      <div class="sec-label">Tu perfil</div>
+      <div class="profile-block"><textarea id="profileInput" rows="5">Affiliates & Business Development Sr. Manager en Paramount International. +15 años en estrategia multiplataforma. Especializado en OTT, FAST, SVOD, AVOD, partnerships de distribución en mercados europeo e iberoamericano.</textarea></div>
+    </div>
+    <div class="sidebar-footer"><div class="credit">Creado por <span>Borja Pérez Herraiz</span></div></div>
+  </div>
+  <div class="tab-view active" id="tab-discover">
+    <div class="toolbar">
+      <button class="btn btn-primary" id="fetchBtn" onclick="fetchTopics()"><span id="fetchLabel">🔍 Buscar tendencias</span></button>
+      <div class="search-wrap"><span class="search-icon">🔎</span><input type="text" placeholder="Filtrar..." oninput="filterTopics(this.value)"></div>
+    </div>
+    <div id="topicsContainer"><div class="empty-state"><div class="empty-icon">📡</div><div class="empty-text">Pulsa "Buscar tendencias" para descubrir lo que genera conversación ahora en streaming y TV.</div></div></div>
+  </div>
+  <div class="tab-view" id="tab-metrics">
+    <div class="banner" id="metricsBanner"><b>Conecta LinkedIn</b> para ver las métricas reales de tus posts publicados.</div>
+    <div id="metricsContainer"></div>
+  </div>
+  <div class="tab-view" id="tab-tips">
+    <div class="banner"><b>Tips personalizados</b> basados en tu perfil y el rendimiento de tus posts.</div>
+    <div id="tipsContainer"></div>
+  </div>
+  <div class="right-panel">
+    <div class="right-scroll">
+      <div><div class="sec-label" style="margin-bottom:.6rem">Tono del post</div>
+        <div class="tone-grid">
+          <div class="tone-btn active" onclick="setTone('opinionado',this)">💬<br><span style="font-size:10px">Opinionado</span></div>
+          <div class="tone-btn" onclick="setTone('reflexivo',this)">🪞<br><span style="font-size:10px">Reflexivo</span></div>
+          <div class="tone-btn" onclick="setTone('divulgativo',this)">📚<br><span style="font-size:10px">Divulgativo</span></div>
+          <div class="tone-btn" onclick="setTone('provocador',this)">🔥<br><span style="font-size:10px">Provocador</span></div>
+          <div class="tone-btn" onclick="setTone('narrativo',this)">📖<br><span style="font-size:10px">Narrativo</span></div>
+          <div class="tone-btn" onclick="setTone('datos',this)">📈<br><span style="font-size:10px">Con datos</span></div>
+        </div>
+      </div>
+      <div><div class="sec-label" style="margin-bottom:.6rem">Longitud</div>
+        <div class="length-row"><input type="range" class="length-slider" id="lengthSlider" min="1" max="3" step="1" value="2" oninput="updateLength(this.value)"><span class="length-val" id="lengthLabel">Medio</span></div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:7px">
+        <div class="sec-label">Borrador</div>
+        <div class="draft-area" id="draftArea"><div class="draft-placeholder"><div class="draft-placeholder-icon">✍️</div><div class="draft-placeholder-text">Selecciona un tema y pulsa "Generar post"</div></div></div>
+        <div class="char-row"><span id="charCount"></span><span id="charStatus"></span></div>
+      </div>
+    </div>
+    <div class="right-footer">
+      <div class="action-row">
+        <button class="pub-btn" id="pubBtn" onclick="publishPost()" disabled>📤 Publicar en LinkedIn</button>
+        <button class="copy-btn" onclick="copyDraft()">📋</button>
+        <button class="icon-btn" onclick="regenDraft()" title="Regenerar">🔄</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<div class="loading-overlay" id="loadingOverlay"><div class="loading-spinner"></div><div class="loading-text" id="loadingText">Cargando...</div></div>
+<script>
+let currentSector='streaming SVOD Netflix Disney HBO 2026';
+let currentTone='opinionado',currentLength=2,allTopics=[],currentDraftRaw='',lastTopicIdx=null,isConnected=false,generating=false;
+const LEN={1:{l:'Corto',k:'short'},2:{l:'Medio',k:'medium'},3:{l:'Largo',k:'long'}};
+async function checkAuth(){
+  try{
+    const r=await fetch('/api/auth/status');const d=await r.json();isConnected=d.connected;
+    const el=document.getElementById('liStatus');
+    if(d.connected){const name=d.profile?.name||d.profile?.given_name||'Conectado';el.innerHTML='<div class="li-connected"><div class="li-dot"></div>'+name+'</div>';document.getElementById('pubBtn').disabled=false;}
+    else{el.innerHTML='<button class="li-connect-btn" onclick="connectLinkedIn()">🔗 Conectar LinkedIn</button>';}
+  }catch(e){}
+}
+function connectLinkedIn(){window.location.href='/api/auth/linkedin';}
+function showTab(t,el){document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-view').forEach(x=>x.classList.remove('active'));el.classList.add('active');document.getElementById('tab-'+t).classList.add('active');if(t==='metrics')loadMetrics();if(t==='tips')loadTips();}
+function setSector(el,s){document.querySelectorAll('.sector-tag').forEach(x=>x.classList.remove('active'));el.classList.add('active');currentSector=s;}
+function setTone(t,el){document.querySelectorAll('.tone-btn').forEach(x=>x.classList.remove('active'));el.classList.add('active');currentTone=t;}
+function updateLength(v){currentLength=parseInt(v);document.getElementById('lengthLabel').textContent=LEN[v].l;}
+function filterTopics(q){q=q.toLowerCase();document.querySelectorAll('.topic-card').forEach(c=>{c.style.display=c.dataset.title.toLowerCase().includes(q)?'':'none';});}
+function showLoading(t){document.getElementById('loadingText').textContent=t;document.getElementById('loadingOverlay').classList.add('show');}
+function hideLoading(){document.getElementById('loadingOverlay').classList.remove('show');}
+async function fetchTopics(){
+  const btn=document.getElementById('fetchBtn'),lbl=document.getElementById('fetchLabel');
+  btn.disabled=true;lbl.innerHTML='<span class="spinner"></span> Buscando...';showLoading('Buscando tendencias en medios, X y LinkedIn...');
+  try{
+    const r=await fetch('/api/search-topics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sector:currentSector})});
+    const data=await r.json();
+    if(!r.ok||data.error){
+      const motivo=data.detail||data.error||('HTTP '+r.status);
+      document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text"><b>Error al buscar.</b><br><br>Motivo: '+motivo+'</div></div>';
+    }else{allTopics=data;renderTopics(allTopics);}
+  }catch(e){
+    document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text"><b>Error de conexión.</b><br><br>'+e.message+'</div></div>';
+  }
+  hideLoading();btn.disabled=false;lbl.innerHTML='🔄 Actualizar';
+}
+function renderTopics(topics){
+  const c=document.getElementById('topicsContainer');c.innerHTML='';
+  const g=document.createElement('div');g.className='topics-grid';
+  const em={hot:'🔥 Muy caliente',trending:'📈 En tendencia',rising:'🌱 Emergente'};
+  const pm={x:{c:'pb-x',l:'𝕏 Twitter'},linkedin:{c:'pb-li',l:'in LinkedIn'},web:{c:'pb-web',l:'🌐 Web'},mixed:{c:'pb-web',l:'🔀 Multi'}};
+  topics.forEach((t,i)=>{
+    const card=document.createElement('div');card.className='topic-card';card.dataset.title=t.title||'';
+    const ec=t.engagement||'rising',p=pm[t.platform]||pm.web;
+    card.innerHTML='<div class="topic-stripe"></div><div class="topic-header"><div class="topic-title">'+t.title+'</div><div class="ep '+ec+'">'+em[ec]+'</div></div><div class="topic-why">'+t.why+'</div><div class="topic-angle">💡 '+t.angle+'</div><div class="topic-footer"><div style="flex:1"><div class="tags">'+(t.tags||[]).map(x=>'<span class="tag">'+x+'</span>').join('')+'</div><div class="eng-stats"><div class="platform-badge '+p.c+'">'+p.l+'</div>'+(t.eng_reactions?'<div class="eng-stat">❤️ '+t.eng_reactions+'</div>':'')+(t.eng_comments?'<div class="eng-stat">💬 '+t.eng_comments+'</div>':'')+'</div></div><button class="gen-btn" onclick="generateDraft('+i+',event)">Generar →</button></div>';
+    card.onclick=e=>{if(e.target.tagName==='BUTTON')return;document.querySelectorAll('.topic-card').forEach(x=>x.classList.remove('selected'));card.classList.add('selected');};
+    g.appendChild(card);
+  });
+  c.appendChild(g);
+}
+async function generateDraft(idx,e){
+  if(e)e.stopPropagation();const topic=allTopics[idx];if(!topic||generating)return;generating=true;lastTopicIdx=idx;
+  document.querySelectorAll('.topic-card').forEach((c,i)=>c.classList.toggle('selected',i===idx));
+  const da=document.getElementById('draftArea');
+  da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon"><span class="spinner" style="border-top-color:var(--accent);border-color:var(--border2);width:20px;height:20px"></span></div><div class="draft-placeholder-text" style="margin-top:8px">Generando...</div></div>';
+  showLoading('Redactando con tu voz...');
+  try{
+    const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,profile:document.getElementById('profileInput').value,tone:currentTone,length:LEN[currentLength].k})});
+    const d=await r.json();currentDraftRaw=d.text||'Error.';
+    da.innerHTML='<div class="draft-text">'+currentDraftRaw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+    document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
+    const st=document.getElementById('charStatus');st.textContent='✓ Listo';st.style.color='var(--green)';
+  }catch(e){da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon">⚠️</div><div class="draft-placeholder-text">Error al generar.</div></div>';}
+  hideLoading();generating=false;
+}
+function regenDraft(){if(lastTopicIdx!==null)generateDraft(lastTopicIdx,null);}
+function copyDraft(){if(currentDraftRaw)navigator.clipboard.writeText(currentDraftRaw);}
+async function publishPost(){
+  if(!currentDraftRaw){alert('Genera un post primero.');return;}
+  if(!isConnected){alert('Conecta LinkedIn primero.');return;}
+  if(!confirm('¿Publicar este post en tu LinkedIn ahora?'))return;
+  showLoading('Publicando en LinkedIn...');
+  try{const r=await fetch('/api/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:currentDraftRaw})});const d=await r.json();hideLoading();if(d.ok)alert('✅ ¡Publicado en LinkedIn!');else alert('Error: '+(d.error||'no se pudo'));}
+  catch(e){hideLoading();alert('Error al publicar.');}
+}
+async function loadMetrics(){
+  if(!isConnected){document.getElementById('metricsContainer').innerHTML='';return;}
+  document.getElementById('metricsBanner').innerHTML='<b>Métricas de tus posts</b> publicados desde StreamVoice.';
+  try{const r=await fetch('/api/metrics');const posts=await r.json();const c=document.getElementById('metricsContainer');
+    if(!posts.length){c.innerHTML='<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">Aún no has publicado posts.</div></div>';return;}
+    c.innerHTML=posts.map(p=>'<div class="metric-card"><div class="metric-title">'+(p.body||'').slice(0,80)+'...</div><div class="metric-grid"><div class="metric-stat"><div class="metric-val">'+(p.metrics?.impressions||0)+'</div><div class="metric-label">Impres.</div></div><div class="metric-stat"><div class="metric-val">'+(p.metrics?.reactions||0)+'</div><div class="metric-label">Reacc.</div></div><div class="metric-stat"><div class="metric-val">'+(p.metrics?.comments||0)+'</div><div class="metric-label">Coment.</div></div><div class="metric-stat"><div class="metric-val">'+(p.metrics?.shares||0)+'</div><div class="metric-label">Compart.</div></div></div></div>').join('');
+  }catch(e){}
+}
+async function loadTips(){
+  const c=document.getElementById('tipsContainer');
+  try{const r=await fetch('/api/tips');if(!r.ok){c.innerHTML='<div class="empty-state"><div class="empty-text">Conecta LinkedIn para ver tips personalizados.</div></div>';return;}
+    const d=await r.json();
+    c.innerHTML=(d.tips||[]).map(t=>'<div class="tip-card"><div class="tip-header"><span style="font-size:18px">'+t.icon+'</span><span class="tip-title">'+t.title+'</span><span class="tip-priority tp-'+t.priority+'">'+(t.priority==='high'?'Alta':t.priority==='medium'?'Media':'Baja')+'</span></div><div class="tip-body">'+t.body+'</div></div>').join('');
+  }catch(e){c.innerHTML='<div class="empty-state"><div class="empty-text">Conecta LinkedIn para ver tips.</div></div>';}
+}
+checkAuth();
+if(window.location.search.includes('connected=true')){setTimeout(checkAuth,500);history.replaceState({},'','/');}
+</script>
+</body>
+</html>
