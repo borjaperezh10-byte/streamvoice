@@ -225,7 +225,7 @@ app.post('/api/generate', async (req, res) => {
 
   try {
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1000,
       system: `Eres el ghostwriter personal de Borja Pérez Herraiz, Affiliates & Business Development Sr. Manager en Paramount International, con +15 años en distribución multiplataforma, OTT, FAST, SVOD y partnerships. Escribes posts de LinkedIn con su voz: directa, experta, sin corporativismos. Español.`,
       messages: [{
@@ -350,7 +350,7 @@ Devuelve SOLO un array JSON (sin backticks, sin texto extra):
   // INTENTO 1: con búsqueda web (temas reales y actuales)
   try {
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1500,
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
       system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas tendencias actuales y reales. Respondes SOLO con JSON válido, sin backticks.',
@@ -367,7 +367,7 @@ Devuelve SOLO un array JSON (sin backticks, sin texto extra):
     // INTENTO 2 (plan B): sin búsqueda web, solo IA
     try {
       const response = await axios.post('https://api.anthropic.com/v1/messages', {
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 1500,
         system: 'Eres un editor de contenido senior del sector audiovisual y streaming, con conocimiento profundo de las tendencias del sector. Respondes SOLO con JSON válido, sin backticks.',
         messages: [{ role: 'user', content: userPrompt }]
