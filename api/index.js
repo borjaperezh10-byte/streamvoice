@@ -338,31 +338,50 @@ app.get('/api/best-times', requireAuth, (req, res) => {
 
 app.post('/api/search-topics', async (req, res) => {
   const { sector } = req.body;
+  const headers = {
+    'x-api-key': process.env.ANTHROPIC_API_KEY,
+    'anthropic-version': '2023-06-01',
+    'Content-Type': 'application/json'
+  };
+  const userPrompt = `Genera las 5 tendencias o temas más relevantes y actuales sobre: ${sector}.
+Devuelve SOLO un array JSON (sin backticks, sin texto extra):
+[{"title":"titular en español max 13 palabras","why":"por qué importa ahora (1 frase)","engagement":"hot|trending|rising","platform":"x|linkedin|web|mixed","eng_reactions":"ej: 8.2k likes","eng_comments":"ej: 1.4k comentarios","tags":["tag1","tag2","tag3"],"angle":"ángulo de opinión para un directivo de Paramount (1 frase)"}]`;
+
+  // INTENTO 1: con búsqueda web (temas reales y actuales)
   try {
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 1200,
-      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-      system: 'Eres un editor de contenido del sector audiovisual. Responde SOLO con JSON válido, sin backticks.',
-      messages: [{
-        role: 'user',
-        content: `Busca las 5 tendencias más relevantes sobre: ${sector}. 
-Devuelve array JSON:
-[{"title":"...","why":"...","engagement":"hot|trending|rising","platform":"x|linkedin|web|mixed","eng_reactions":"...","eng_comments":"...","tags":["..."],"angle":"..."}]`
-      }]
-    }, {
-      headers: {
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json'
-      }
-    });
+      max_tokens: 1500,
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
+      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas tendencias actuales y reales. Respondes SOLO con JSON válido, sin backticks.',
+      messages: [{ role: 'user', content: `Busca en internet y luego ${userPrompt}` }]
+    }, { headers, timeout: 55000 });
 
-    const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '[]';
-    const clean = text.replace(/```json|```/g, '').trim();
-    res.json(JSON.parse(clean));
-  } catch (err) {
-    res.status(500).json({ error: 'Search failed' });
+    const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
+    const match = text.match(/\[[\s\S]*\]/);
+    if (match) return res.json(JSON.parse(match[0]));
+    throw new Error('No JSON in web search response');
+  } catch (webErr) {
+    console.error('Web search failed, trying fallback:', webErr.response?.data || webErr.message);
+
+    // INTENTO 2 (plan B): sin búsqueda web, solo IA
+    try {
+      const response = await axios.post('https://api.anthropic.com/v1/messages', {
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1500,
+        system: 'Eres un editor de contenido senior del sector audiovisual y streaming, con conocimiento profundo de las tendencias del sector. Respondes SOLO con JSON válido, sin backticks.',
+        messages: [{ role: 'user', content: userPrompt }]
+      }, { headers, timeout: 30000 });
+
+      const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
+      const match = text.match(/\[[\s\S]*\]/);
+      if (match) return res.json(JSON.parse(match[0]));
+      throw new Error('No JSON in fallback response');
+    } catch (fallbackErr) {
+      const detail = fallbackErr.response?.data?.error?.message || fallbackErr.message;
+      console.error('Fallback also failed:', detail);
+      res.status(500).json({ error: 'Search failed', detail });
+    }
   }
 });
 
