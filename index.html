@@ -108,6 +108,15 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .tip-body{font-size:12px;color:var(--muted);line-height:1.6}
 .tip-priority{padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
 .tp-high{background:var(--red-dim);color:var(--red)}.tp-medium{background:var(--orange-dim);color:var(--orange)}.tp-low{background:var(--blue-dim);color:var(--blue)}
+.topic-meta-row{display:flex;align-items:center;gap:12px;margin-bottom:9px;flex-wrap:wrap}
+.topic-meta-item{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px}
+.topic-link{font-size:11px;color:var(--blue);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:5px;background:var(--blue-dim);border:1px solid rgba(79,168,255,0.2);transition:all .2s}
+.topic-link:hover{background:rgba(79,168,255,0.18)}
+.hist-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.hist-item:hover{border-color:var(--border2)}
+.hist-item.active{border-color:var(--accent-border);background:var(--accent-dim)}
+.hist-sector{font-size:12.5px;font-weight:500;color:var(--text)}
+.hist-meta{font-size:11px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -144,6 +153,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
       <div class="search-wrap"><span class="search-icon">🔎</span><input type="text" placeholder="Filtrar..." oninput="filterTopics(this.value)"></div>
     </div>
     <div id="topicsContainer"><div class="empty-state"><div class="empty-icon">📡</div><div class="empty-text">Pulsa "Buscar tendencias" para descubrir lo que genera conversación ahora en streaming y TV.</div></div></div>
+    <div id="historyBox" style="display:none"><div class="sec-label" style="margin-top:1rem;margin-bottom:.6rem">Histórico de búsquedas</div><div id="historyList"></div></div>
   </div>
   <div class="tab-view" id="tab-metrics">
     <div class="banner" id="metricsBanner"><b>Conecta LinkedIn</b> para ver las métricas reales de tus posts publicados.</div>
@@ -188,7 +198,10 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 <script>
 let currentSector='streaming SVOD Netflix Disney HBO 2026';
 let currentTone='opinionado',currentLength=2,allTopics=[],currentDraftRaw='',lastTopicIdx=null,isConnected=false,generating=false;
+let searchHistory=[];
 const LEN={1:{l:'Corto',k:'short'},2:{l:'Medio',k:'medium'},3:{l:'Largo',k:'long'}};
+const SECTOR_NAMES={'streaming SVOD Netflix Disney HBO 2026':'Streaming & SVOD','FAST channels free ad-supported TV 2026':'FAST & Free TV','operadores Pay TV cable cord-cutting 2026':'Operadores','producción audiovisual contenidos distribución 2026':'Contenido','CTV programmatic advertising monetización 2026':'Ad Tech & CTV','media deals partnerships distribución OTT 2026':'Partnerships'};
+function fmtDate(iso){try{const d=new Date(iso);return d.toLocaleString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return iso;}}
 async function checkAuth(){
   try{
     const r=await fetch('/api/auth/status');const d=await r.json();isConnected=d.connected;
@@ -207,32 +220,57 @@ function showLoading(t){document.getElementById('loadingText').textContent=t;doc
 function hideLoading(){document.getElementById('loadingOverlay').classList.remove('show');}
 async function fetchTopics(){
   const btn=document.getElementById('fetchBtn'),lbl=document.getElementById('fetchLabel');
-  btn.disabled=true;lbl.innerHTML='<span class="spinner"></span> Buscando...';showLoading('Buscando tendencias en medios, X y LinkedIn...');
+  btn.disabled=true;lbl.innerHTML='<span class="spinner"></span> Buscando...';showLoading('Buscando noticias de las últimas 24h en medios, X y LinkedIn...');
   try{
     const r=await fetch('/api/search-topics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sector:currentSector})});
     const data=await r.json();
     if(!r.ok||data.error){
       const motivo=data.detail||data.error||('HTTP '+r.status);
       document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text"><b>Error al buscar.</b><br><br>Motivo: '+motivo+'</div></div>';
-    }else{allTopics=data;renderTopics(allTopics);}
+    }else{
+      allTopics=data.topics||[];
+      const searchedAt=data.searchedAt||new Date().toISOString();
+      if(allTopics.length){searchHistory.unshift({sector:currentSector,sectorName:SECTOR_NAMES[currentSector]||'Sector',topics:allTopics,searchedAt});if(searchHistory.length>10)searchHistory.pop();}
+      renderTopics(allTopics,searchedAt);
+      renderHistory();
+    }
   }catch(e){
     document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text"><b>Error de conexión.</b><br><br>'+e.message+'</div></div>';
   }
   hideLoading();btn.disabled=false;lbl.innerHTML='🔄 Actualizar';
 }
-function renderTopics(topics){
+function renderTopics(topics,searchedAt){
   const c=document.getElementById('topicsContainer');c.innerHTML='';
+  if(searchedAt){const meta=document.createElement('div');meta.style.cssText='font-size:11px;color:var(--muted);margin-bottom:4px;display:flex;align-items:center;gap:6px';meta.innerHTML='<span style="color:var(--green)">●</span> Última búsqueda: '+fmtDate(searchedAt)+' · '+topics.length+' temas (últimas 24h)';c.appendChild(meta);}
+  if(!topics.length){c.innerHTML+='<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">No hay temas muy calientes o en tendencia en las últimas 24h para este sector. Prueba otra temática o actualiza más tarde.</div></div>';return;}
   const g=document.createElement('div');g.className='topics-grid';
-  const em={hot:'🔥 Muy caliente',trending:'📈 En tendencia',rising:'🌱 Emergente'};
+  const em={hot:'🔥 Muy caliente',trending:'📈 En tendencia'};
   const pm={x:{c:'pb-x',l:'𝕏 Twitter'},linkedin:{c:'pb-li',l:'in LinkedIn'},web:{c:'pb-web',l:'🌐 Web'},mixed:{c:'pb-web',l:'🔀 Multi'}};
   topics.forEach((t,i)=>{
     const card=document.createElement('div');card.className='topic-card';card.dataset.title=t.title||'';
-    const ec=t.engagement||'rising',p=pm[t.platform]||pm.web;
-    card.innerHTML='<div class="topic-stripe"></div><div class="topic-header"><div class="topic-title">'+t.title+'</div><div class="ep '+ec+'">'+em[ec]+'</div></div><div class="topic-why">'+t.why+'</div><div class="topic-angle">💡 '+t.angle+'</div><div class="topic-footer"><div style="flex:1"><div class="tags">'+(t.tags||[]).map(x=>'<span class="tag">'+x+'</span>').join('')+'</div><div class="eng-stats"><div class="platform-badge '+p.c+'">'+p.l+'</div>'+(t.eng_reactions?'<div class="eng-stat">❤️ '+t.eng_reactions+'</div>':'')+(t.eng_comments?'<div class="eng-stat">💬 '+t.eng_comments+'</div>':'')+'</div></div><button class="gen-btn" onclick="generateDraft('+i+',event)">Generar →</button></div>';
-    card.onclick=e=>{if(e.target.tagName==='BUTTON')return;document.querySelectorAll('.topic-card').forEach(x=>x.classList.remove('selected'));card.classList.add('selected');};
+    const ec=(t.engagement==='hot'||t.engagement==='trending')?t.engagement:'trending',p=pm[t.platform]||pm.web;
+    const pub=t.published?'<span class="topic-meta-item">🕐 '+t.published+'</span>':'';
+    const link=t.url?'<a href="'+t.url+'" target="_blank" rel="noopener" class="topic-link" onclick="event.stopPropagation()">🔗 Ver publicación</a>':'';
+    card.innerHTML='<div class="topic-stripe"></div><div class="topic-header"><div class="topic-title">'+t.title+'</div><div class="ep '+ec+'">'+em[ec]+'</div></div><div class="topic-why">'+t.why+'</div><div class="topic-angle">💡 '+t.angle+'</div>'+((pub||link)?'<div class="topic-meta-row">'+pub+link+'</div>':'')+'<div class="topic-footer"><div style="flex:1"><div class="tags">'+(t.tags||[]).map(x=>'<span class="tag">'+x+'</span>').join('')+'</div><div class="eng-stats"><div class="platform-badge '+p.c+'">'+p.l+'</div>'+(t.eng_reactions?'<div class="eng-stat">❤️ '+t.eng_reactions+'</div>':'')+(t.eng_comments?'<div class="eng-stat">💬 '+t.eng_comments+'</div>':'')+'</div></div><button class="gen-btn" onclick="generateDraft('+i+',event)">Generar →</button></div>';
+    card.onclick=e=>{if(e.target.tagName==='BUTTON'||e.target.tagName==='A')return;document.querySelectorAll('.topic-card').forEach(x=>x.classList.remove('selected'));card.classList.add('selected');};
     g.appendChild(card);
   });
   c.appendChild(g);
+}
+function renderHistory(){
+  const box=document.getElementById('historyBox');
+  if(!box)return;
+  if(searchHistory.length<=1){box.style.display='none';return;}
+  box.style.display='block';
+  const list=document.getElementById('historyList');
+  list.innerHTML=searchHistory.map((h,i)=>'<div class="hist-item'+(i===0?' active':'')+'" onclick="loadFromHistory('+i+')"><div class="hist-sector">'+h.sectorName+'</div><div class="hist-meta">'+fmtDate(h.searchedAt)+' · '+h.topics.length+' temas</div></div>').join('');
+}
+function loadFromHistory(i){
+  const h=searchHistory[i];if(!h)return;
+  allTopics=h.topics;currentSector=h.sector;
+  document.querySelectorAll('.hist-item').forEach((x,j)=>x.classList.toggle('active',j===i));
+  renderTopics(allTopics,h.searchedAt);
+}
 }
 async function generateDraft(idx,e){
   if(e)e.stopPropagation();const topic=allTopics[idx];if(!topic||generating)return;generating=true;lastTopicIdx=idx;
