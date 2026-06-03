@@ -1,23 +1,56 @@
 require('dotenv').config();
 const express = require('express');
-const session = require('express-session');
 const axios = require('axios');
 const path = require('path');
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'dev-secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 }
-}));
 
-// In-memory store (upgrade to Vercel KV or Redis for production persistence)
+// ─── SUPABASE (almacenamiento persistente) ─────────────────────────────────────
+const SB_URL = process.env.SUPABASE_URL;
+const SB_KEY = process.env.SUPABASE_ANON_KEY;
+const sbHeaders = {
+  'apikey': SB_KEY,
+  'Authorization': `Bearer ${SB_KEY}`,
+  'Content-Type': 'application/json'
+};
+// Como la app la usa una sola persona, usamos un identificador fijo para "la" sesión
+const SESSION_ID = 'borja-main';
+
+async function sbGet(table, query='') {
+  const r = await axios.get(`${SB_URL}/rest/v1/${table}${query}`, { headers: sbHeaders });
+  return r.data;
+}
+async function sbUpsert(table, row) {
+  const r = await axios.post(`${SB_URL}/rest/v1/${table}`, row, {
+    headers: { ...sbHeaders, 'Prefer': 'resolution=merge-duplicates,return=representation' }
+  });
+  return r.data;
+}
+async function sbDelete(table, query) {
+  await axios.delete(`${SB_URL}/rest/v1/${table}${query}`, { headers: sbHeaders });
+}
+
+// Guardar / leer la sesión de LinkedIn en Supabase
+async function saveSession(data) {
+  await sbUpsert('sessions', { id: SESSION_ID, data, expires_at: data.tokenExpiry ? new Date(data.tokenExpiry).toISOString() : null });
+}
+async function loadSession() {
+  try {
+    const rows = await sbGet('sessions', `?id=eq.${SESSION_ID}&select=*`);
+    if (rows && rows[0]) return rows[0].data;
+  } catch(e) { console.error('loadSession error:', e.response?.data || e.message); }
+  return null;
+}
+async function clearSession() {
+  try { await sbDelete('sessions', `?id=eq.${SESSION_ID}`); } catch(e) {}
+}
+
+// In-memory store solo para posts/métricas (no crítico)
 const store = {
-  posts: [],       // { id, title, body, scheduledAt, publishedAt, linkedinId }
-  metrics: [],     // { postId, impressions, reactions, comments, shares, date }
+  posts: [],
+  metrics: [],
   userProfile: null
 };
 
@@ -43,15 +76,16 @@ app.get('/api/auth/callback', async (req, res) => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
 
-    req.session.accessToken = tokenRes.data.access_token;
-    req.session.tokenExpiry = Date.now() + tokenRes.data.expires_in * 1000;
+    const accessToken = tokenRes.data.access_token;
+    const tokenExpiry = Date.now() + tokenRes.data.expires_in * 1000;
 
     // Fetch LinkedIn profile
     const profileRes = await axios.get('https://api.linkedin.com/v2/userinfo', {
-      headers: { Authorization: `Bearer ${req.session.accessToken}` }
+      headers: { Authorization: `Bearer ${accessToken}` }
     });
-    req.session.profile = profileRes.data;
-    store.userProfile = profileRes.data;
+
+    // Guardar la sesión en Supabase (persistente)
+    await saveSession({ accessToken, tokenExpiry, profile: profileRes.data });
 
     res.redirect('/?connected=true');
   } catch (err) {
@@ -60,26 +94,29 @@ app.get('/api/auth/callback', async (req, res) => {
   }
 });
 
-app.get('/api/auth/status', (req, res) => {
-  const connected = !!(req.session.accessToken && req.session.tokenExpiry > Date.now());
+app.get('/api/auth/status', async (req, res) => {
+  const s = await loadSession();
+  const connected = !!(s && s.accessToken && s.tokenExpiry > Date.now());
   res.json({
     connected,
-    profile: connected ? req.session.profile : null,
-    expiresIn: connected ? Math.floor((req.session.tokenExpiry - Date.now()) / 1000) : 0
+    profile: connected ? s.profile : null,
+    expiresIn: connected ? Math.floor((s.tokenExpiry - Date.now()) / 1000) : 0
   });
 });
 
-app.post('/api/auth/logout', (req, res) => {
-  req.session.destroy();
+app.post('/api/auth/logout', async (req, res) => {
+  await clearSession();
   res.json({ ok: true });
 });
 
 // ─── MIDDLEWARE: require auth ──────────────────────────────────────────────────
 
-function requireAuth(req, res, next) {
-  if (!req.session.accessToken || req.session.tokenExpiry < Date.now()) {
+async function requireAuth(req, res, next) {
+  const s = await loadSession();
+  if (!s || !s.accessToken || s.tokenExpiry < Date.now()) {
     return res.status(401).json({ error: 'Not authenticated. Please connect LinkedIn.' });
   }
+  req.linkedinSession = s;
   next();
 }
 
@@ -104,7 +141,7 @@ app.post('/api/publish', requireAuth, async (req, res) => {
 
   // Publish now
   try {
-    const authorId = req.session.profile?.sub;
+    const authorId = req.linkedinSession.profile?.sub;
     const payload = {
       author: `urn:li:person:${authorId}`,
       lifecycleState: 'PUBLISHED',
@@ -119,7 +156,7 @@ app.post('/api/publish', requireAuth, async (req, res) => {
 
     const publishRes = await axios.post('https://api.linkedin.com/v2/ugcPosts', payload, {
       headers: {
-        Authorization: `Bearer ${req.session.accessToken}`,
+        Authorization: `Bearer ${req.linkedinSession.accessToken}`,
         'Content-Type': 'application/json',
         'X-Restli-Protocol-Version': '2.0.0'
       }
@@ -152,7 +189,7 @@ app.get('/api/metrics/:postId', requireAuth, async (req, res) => {
     // LinkedIn Statistics API
     const statsRes = await axios.get(
       `https://api.linkedin.com/v2/socialMetadata/${encodeURIComponent(post.linkedinId)}`,
-      { headers: { Authorization: `Bearer ${req.session.accessToken}` } }
+      { headers: { Authorization: `Bearer ${req.linkedinSession.accessToken}` } }
     );
 
     const data = statsRes.data;
@@ -338,8 +375,45 @@ app.get('/api/best-times', requireAuth, (req, res) => {
 
 // ─── SEARCH TOPICS (proxy) ────────────────────────────────────────────────────
 
+// Guarda la búsqueda en el historial y actualiza el límite de 24h
+async function persistSearch(sector, topics, searchedAt) {
+  try {
+    await sbUpsert('searches', { sector, sector_name: sector, topics, searched_at: searchedAt });
+    await sbUpsert('rate_limit', { sector, last_search: searchedAt });
+  } catch(e) { console.error('persistSearch error:', e.response?.data || e.message); }
+}
+
+// Endpoint: historial de búsquedas (últimas 20)
+app.get('/api/search-history', async (req, res) => {
+  try {
+    const rows = await sbGet('searches', '?select=*&order=searched_at.desc&limit=20');
+    res.json(rows || []);
+  } catch(e) {
+    res.json([]);
+  }
+});
+
 app.post('/api/search-topics', async (req, res) => {
   const { sector } = req.body;
+
+  // ── Límite de 24h por sector (usando Supabase) ──
+  try {
+    const rows = await sbGet('rate_limit', `?sector=eq.${encodeURIComponent(sector)}&select=*`);
+    if (rows && rows[0]) {
+      const last = new Date(rows[0].last_search).getTime();
+      const hoursPassed = (Date.now() - last) / (1000 * 60 * 60);
+      if (hoursPassed < 24) {
+        const hoursLeft = Math.ceil(24 - hoursPassed);
+        return res.status(429).json({
+          error: 'rate_limited',
+          detail: `Ya buscaste en esta categoría hace poco. Podrás volver a buscar en ~${hoursLeft}h.`,
+          lastSearch: rows[0].last_search,
+          hoursLeft
+        });
+      }
+    }
+  } catch(e) { console.error('Rate limit check error:', e.response?.data || e.message); }
+
   const headers = {
     'x-api-key': process.env.ANTHROPIC_API_KEY,
     'anthropic-version': '2023-06-01',
@@ -370,6 +444,7 @@ Devuelve SOLO un array JSON (sin backticks, sin texto extra):
     if (match) {
       let topics = JSON.parse(match[0]);
       topics = topics.filter(t => t.engagement === 'hot' || t.engagement === 'trending');
+      await persistSearch(sector, topics, now);
       return res.json({ topics, searchedAt: now, source: 'web' });
     }
     throw new Error('No JSON in web search response');
@@ -390,6 +465,7 @@ Devuelve SOLO un array JSON (sin backticks, sin texto extra):
       if (match) {
         let topics = JSON.parse(match[0]);
         topics = topics.filter(t => t.engagement === 'hot' || t.engagement === 'trending');
+        await persistSearch(sector, topics, now);
         return res.json({ topics, searchedAt: now, source: 'ai' });
       }
       throw new Error('No JSON in fallback response');
