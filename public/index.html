@@ -20,6 +20,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .li-connect-btn{display:flex;align-items:center;gap:7px;background:#0a66c2;border:none;padding:7px 16px;border-radius:20px;font-size:12.5px;color:#fff;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500}
 .li-connect-btn:hover{background:#0958a8}
 .li-connected{display:flex;align-items:center;gap:6px;background:rgba(61,255,160,0.1);border:1px solid rgba(61,255,160,0.25);padding:5px 14px;border-radius:20px;font-size:12px;color:var(--green)}
+#liStatus{display:flex;align-items:center}
 .li-dot{width:6px;height:6px;background:var(--green);border-radius:50%}
 .app{display:flex;flex-direction:column;height:100vh}
 .body{flex:1;display:grid;grid-template-columns:240px 1fr 370px;overflow:hidden;min-height:0}
@@ -35,6 +36,14 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .profile-block{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px}
 .profile-block textarea{background:transparent;border:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;width:100%;outline:none;resize:none;line-height:1.6}
 .credit{font-size:11px;color:var(--muted2);text-align:center}.credit span{color:var(--muted)}
+.cost-widget{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:11px 12px;margin-bottom:12px}
+.cost-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.cost-label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+.cost-select{background:var(--surface3);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-size:10px;font-family:'DM Sans',sans-serif;padding:2px 4px;outline:none;cursor:pointer}
+.cost-amount{font-size:22px;font-weight:600;color:var(--green);font-family:'Playfair Display',serif;line-height:1}
+.cost-detail{font-size:10.5px;color:var(--muted);margin-top:4px}
+.li-disconnect-btn{background:transparent;border:1px solid var(--border2);border-radius:20px;padding:5px 12px;font-size:11px;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;margin-left:8px;transition:all .2s}
+.li-disconnect-btn:hover{color:var(--red);border-color:rgba(255,79,109,0.3)}
 .tab-view{display:none;flex:1;overflow-y:auto;padding:1.5rem;flex-direction:column;gap:1.1rem}.tab-view.active{display:flex}
 .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .btn{padding:8px 18px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif;font-size:12.5px;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
@@ -145,7 +154,14 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
       <div class="sec-label">Tu perfil</div>
       <div class="profile-block"><textarea id="profileInput" rows="5">Affiliates & Business Development Sr. Manager en Paramount International. +15 años en estrategia multiplataforma. Especializado en OTT, FAST, SVOD, AVOD, partnerships de distribución en mercados europeo e iberoamericano.</textarea></div>
     </div>
-    <div class="sidebar-footer"><div class="credit">Creado por <span>Borja Pérez Herraiz</span></div></div>
+    <div class="sidebar-footer">
+      <div class="cost-widget">
+        <div class="cost-header"><span class="cost-label">Gasto estimado</span><select id="costMonth" onchange="renderCost()" class="cost-select"></select></div>
+        <div class="cost-amount" id="costAmount">$0.00</div>
+        <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
+      </div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span></div>
+    </div>
   </div>
   <div class="tab-view active" id="tab-discover">
     <div class="toolbar">
@@ -176,7 +192,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         </div>
       </div>
       <div><div class="sec-label" style="margin-bottom:.6rem">Longitud</div>
-        <div class="length-row"><input type="range" class="length-slider" id="lengthSlider" min="1" max="3" step="1" value="2" oninput="updateLength(this.value)"><span class="length-val" id="lengthLabel">Medio</span></div>
+        <div class="length-row"><input type="range" class="length-slider" id="lengthSlider" min="1" max="5" step="1" value="3" oninput="updateLength(this.value)"><span class="length-val" id="lengthLabel">Medio (~1000)</span></div>
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:7px">
         <div class="sec-label">Borrador</div>
@@ -187,8 +203,8 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
     <div class="right-footer">
       <div class="action-row">
         <button class="pub-btn" id="pubBtn" onclick="publishPost()" disabled>📤 Publicar en LinkedIn</button>
-        <button class="copy-btn" onclick="copyDraft()">📋</button>
-        <button class="icon-btn" onclick="regenDraft()" title="Regenerar">🔄</button>
+        <button class="copy-btn" onclick="copyDraft()" title="Copiar el texto al portapapeles">📋 Copiar</button>
+        <button class="icon-btn" onclick="regenDraft()" title="Generar otra versión del mismo post">🔄 Regenerar</button>
       </div>
     </div>
   </div>
@@ -197,24 +213,47 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 <div class="loading-overlay" id="loadingOverlay"><div class="loading-spinner"></div><div class="loading-text" id="loadingText">Cargando...</div></div>
 <script>
 let currentSector='streaming SVOD Netflix Disney HBO 2026';
-let currentTone='opinionado',currentLength=2,allTopics=[],currentDraftRaw='',lastTopicIdx=null,isConnected=false,generating=false;
+let currentTone='opinionado',currentLength=3,allTopics=[],currentDraftRaw='',lastTopicIdx=null,isConnected=false,generating=false;
 let searchHistory=[];
-const LEN={1:{l:'Corto',k:'short'},2:{l:'Medio',k:'medium'},3:{l:'Largo',k:'long'}};
+const LEN={1:{l:'Muy corto',c:'~300',k:'veryshort'},2:{l:'Corto',c:'~600',k:'short'},3:{l:'Medio',c:'~1000',k:'medium'},4:{l:'Largo',c:'~1500',k:'long'},5:{l:'Muy largo',c:'~2000',k:'verylong'}};
 const SECTOR_NAMES={'streaming SVOD Netflix Disney HBO 2026':'Streaming & SVOD','FAST channels free ad-supported TV 2026':'FAST & Free TV','operadores Pay TV cable cord-cutting 2026':'Operadores','producción audiovisual contenidos distribución 2026':'Contenido','CTV programmatic advertising monetización 2026':'Ad Tech & CTV','media deals partnerships distribución OTT 2026':'Partnerships'};
 function fmtDate(iso){try{const d=new Date(iso);return d.toLocaleString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return iso;}}
 async function checkAuth(){
   try{
     const r=await fetch('/api/auth/status');const d=await r.json();isConnected=d.connected;
     const el=document.getElementById('liStatus');
-    if(d.connected){const name=d.profile?.name||d.profile?.given_name||'Conectado';el.innerHTML='<div class="li-connected"><div class="li-dot"></div>'+name+'</div>';document.getElementById('pubBtn').disabled=false;}
-    else{el.innerHTML='<button class="li-connect-btn" onclick="connectLinkedIn()">🔗 Conectar LinkedIn</button>';}
+    if(d.connected){const name=d.profile?.name||d.profile?.given_name||'Borja Pérez Herraiz';el.innerHTML='<div class="li-connected"><div class="li-dot"></div>Conectado: '+name+'</div><button class="li-disconnect-btn" onclick="disconnectLinkedIn()">Desconectar</button>';document.getElementById('pubBtn').disabled=false;}
+    else{el.innerHTML='<button class="li-connect-btn" onclick="connectLinkedIn()">🔗 Conectar LinkedIn</button>';document.getElementById('pubBtn').disabled=true;}
   }catch(e){}
 }
 function connectLinkedIn(){window.location.href='/api/auth/linkedin';}
+async function disconnectLinkedIn(){
+  if(!confirm('¿Desconectar tu cuenta de LinkedIn?'))return;
+  try{await fetch('/api/auth/logout',{method:'POST'});}catch(e){}
+  isConnected=false;checkAuth();
+}
+// ── Contador de gasto estimado (persistente en el navegador) ──
+const COST_SEARCH=0.04, COST_POST=0.012; // coste aprox en $ por búsqueda y por post
+function monthKey(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+function getUsage(){try{return JSON.parse(localStorage.getItem('sv_usage')||'{}');}catch(e){return {};}}
+function addUsage(type){const u=getUsage();const k=monthKey();if(!u[k])u[k]={searches:0,posts:0};u[k][type==='search'?'searches':'posts']++;localStorage.setItem('sv_usage',JSON.stringify(u));renderCost();}
+function fillCostMonths(){
+  const sel=document.getElementById('costMonth');if(!sel)return;
+  const u=getUsage();const months=new Set([monthKey()]);Object.keys(u).forEach(k=>months.add(k));
+  const sorted=[...months].sort().reverse();
+  sel.innerHTML=sorted.map(m=>{const [y,mo]=m.split('-');const nm=new Date(y,mo-1).toLocaleString('es-ES',{month:'short'});return '<option value="'+m+'">'+nm+' '+y+'</option>';}).join('');
+}
+function renderCost(){
+  const sel=document.getElementById('costMonth');if(!sel)return;
+  const k=sel.value||monthKey();const u=getUsage();const m=u[k]||{searches:0,posts:0};
+  const cost=(m.searches*COST_SEARCH+m.posts*COST_POST);
+  document.getElementById('costAmount').textContent='$'+cost.toFixed(2);
+  document.getElementById('costDetail').textContent=m.searches+' búsquedas · '+m.posts+' posts';
+}
 function showTab(t,el){document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-view').forEach(x=>x.classList.remove('active'));el.classList.add('active');document.getElementById('tab-'+t).classList.add('active');if(t==='metrics')loadMetrics();if(t==='tips')loadTips();}
 function setSector(el,s){document.querySelectorAll('.sector-tag').forEach(x=>x.classList.remove('active'));el.classList.add('active');currentSector=s;}
 function setTone(t,el){document.querySelectorAll('.tone-btn').forEach(x=>x.classList.remove('active'));el.classList.add('active');currentTone=t;}
-function updateLength(v){currentLength=parseInt(v);document.getElementById('lengthLabel').textContent=LEN[v].l;}
+function updateLength(v){currentLength=parseInt(v);document.getElementById('lengthLabel').textContent=LEN[v].l+' ('+LEN[v].c+')';}
 function filterTopics(q){q=q.toLowerCase();document.querySelectorAll('.topic-card').forEach(c=>{c.style.display=c.dataset.title.toLowerCase().includes(q)?'':'none';});}
 function showLoading(t){document.getElementById('loadingText').textContent=t;document.getElementById('loadingOverlay').classList.add('show');}
 function hideLoading(){document.getElementById('loadingOverlay').classList.remove('show');}
@@ -231,6 +270,7 @@ async function fetchTopics(){
       allTopics=data.topics||[];
       const searchedAt=data.searchedAt||new Date().toISOString();
       if(allTopics.length){searchHistory.unshift({sector:currentSector,sectorName:SECTOR_NAMES[currentSector]||'Sector',topics:allTopics,searchedAt});if(searchHistory.length>10)searchHistory.pop();}
+      addUsage('search');
       renderTopics(allTopics,searchedAt);
       renderHistory();
     }
@@ -283,6 +323,7 @@ async function generateDraft(idx,e){
     da.innerHTML='<div class="draft-text">'+currentDraftRaw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
     document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
     const st=document.getElementById('charStatus');st.textContent='✓ Listo';st.style.color='var(--green)';
+    if(d.text)addUsage('post');
   }catch(e){da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon">⚠️</div><div class="draft-placeholder-text">Error al generar.</div></div>';}
   hideLoading();generating=false;
 }
@@ -312,6 +353,7 @@ async function loadTips(){
   }catch(e){c.innerHTML='<div class="empty-state"><div class="empty-text">Conecta LinkedIn para ver tips.</div></div>';}
 }
 checkAuth();
+fillCostMonths();renderCost();
 if(window.location.search.includes('connected=true')){setTimeout(checkAuth,500);history.replaceState({},'','/');}
 </script>
 </body>
