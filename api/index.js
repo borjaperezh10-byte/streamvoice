@@ -358,10 +358,10 @@ Devuelve SOLO un array JSON (sin backticks, sin texto extra):
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-sonnet-4-6',
       max_tokens: 2000,
-      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
       system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas noticias y tendencias REALES de las últimas 24 horas, con su enlace original. Respondes SOLO con JSON válido, sin backticks.',
       messages: [{ role: 'user', content: `Busca en internet noticias de las últimas 24 horas y luego ${userPrompt}` }]
-    }, { headers, timeout: 60000 });
+    }, { headers, timeout: 40000 });
 
     const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
     const match = text.match(/\[[\s\S]*\]/);
