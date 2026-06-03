@@ -271,7 +271,6 @@ function loadFromHistory(i){
   document.querySelectorAll('.hist-item').forEach((x,j)=>x.classList.toggle('active',j===i));
   renderTopics(allTopics,h.searchedAt);
 }
-}
 async function generateDraft(idx,e){
   if(e)e.stopPropagation();const topic=allTopics[idx];if(!topic||generating)return;generating=true;lastTopicIdx=idx;
   document.querySelectorAll('.topic-card').forEach((c,i)=>c.classList.toggle('selected',i===idx));
