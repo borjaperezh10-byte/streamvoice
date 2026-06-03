@@ -209,9 +209,11 @@ app.post('/api/generate', async (req, res) => {
   const { topic, profile, tone, length } = req.body;
 
   const lengthMap = {
-    short: 'entre 300 y 500 caracteres, muy directo e impactante',
-    medium: 'entre 800 y 1200 caracteres con buen desarrollo',
-    long: 'entre 1500 y 2000 caracteres con profundidad y contexto'
+    veryshort: 'unos 300 caracteres, muy breve e impactante, como un titular con gancho',
+    short: 'unos 600 caracteres, conciso y directo',
+    medium: 'unos 1000 caracteres, con buen desarrollo del argumento',
+    long: 'unos 1500 caracteres, con profundidad y contexto',
+    verylong: 'unos 2000 caracteres, análisis completo y detallado'
   };
 
   const toneMap = {
