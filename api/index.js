@@ -507,25 +507,25 @@ app.post('/api/search-topics', async (req, res) => {
   };
   const now = new Date().toISOString();
   const sourcesLine = sourcesList ? `Prioriza estas fuentes de confianza: ${sourcesList}.` : '';
-  const userPrompt = `Genera SOLO tendencias o noticias RECIENTES (de los últimos 3 días como máximo) sobre: ${sector}.
+  const userPrompt = `Genera SOLO tendencias o noticias RECIENTES (de los últimos 5 días como máximo) sobre: ${sector}.
 Fecha y hora actual de referencia: ${now}.
 ${sourcesLine}
 REGLAS ESTRICTAS:
-- SOLO noticias publicadas en los últimos 3 días. Si una noticia es más antigua, NO la incluyas bajo ningún concepto.
+- SOLO noticias publicadas en los últimos 5 días. Si una noticia es más antigua, NO la incluyas bajo ningún concepto.
 - Solo temas con engagement "hot" (muy caliente) o "trending" (en tendencia).
 - Es mejor devolver pocos temas (o ninguno) que incluir noticias antiguas. NO rellenes.
 - Cada URL debe ser un enlace REAL y verificado a la noticia original.
 Devuelve SOLO un array JSON (sin backticks, sin texto extra). Si no hay noticias frescas que cumplan, devuelve un array vacío [].
 [{"title":"titular en español max 13 palabras","why":"por qué importa ahora (1 frase)","engagement":"hot|trending","platform":"x|linkedin|web|mixed","eng_reactions":"ej: 8.2k likes","eng_comments":"ej: 1.4k comentarios","tags":["tag1","tag2","tag3"],"angle":"ángulo de opinión para un directivo de Paramount (1 frase)","published":"fecha de la noticia, ej: 'Hoy 09:30' o '2026-06-02'","url":"enlace directo REAL a la noticia original"}]`;
 
-  // Búsqueda web (temas reales y frescos de los últimos 3 días)
+  // Búsqueda web (temas reales y frescos de los últimos 5 días)
   try {
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-sonnet-4-6',
       max_tokens: 2500,
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
-      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas SOLO noticias REALES de los últimos 3 días, con su enlace original verificado. Si no hay nada fresco, devuelves un array vacío. Nunca inventas URLs ni rellenas con noticias antiguas. Respondes SOLO con JSON válido, sin backticks.',
-      messages: [{ role: 'user', content: `Busca en internet noticias de los últimos 3 días y luego ${userPrompt}` }]
+      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas SOLO noticias REALES de los últimos 5 días, con su enlace original verificado. Si no hay nada fresco, devuelves un array vacío. Nunca inventas URLs ni rellenas con noticias antiguas. Respondes SOLO con JSON válido, sin backticks.',
+      messages: [{ role: 'user', content: `Busca en internet noticias de los últimos 5 días y luego ${userPrompt}` }]
     }, { headers, timeout: 45000 });
 
     const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
