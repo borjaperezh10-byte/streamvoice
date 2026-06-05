@@ -54,6 +54,20 @@ const store = {
   userProfile: null
 };
 
+// ─── SEGURIDAD DE ACCESO ────────────────────────────────────────────────────
+// Verifica la contraseña de acceso a la app
+app.post('/api/access', (req, res) => {
+  const { password } = req.body;
+  if (!process.env.ACCESS_PASSWORD) {
+    // Si no se ha configurado contraseña, se permite el acceso (para no bloquear)
+    return res.json({ ok: true, noPasswordSet: true });
+  }
+  if (password === process.env.ACCESS_PASSWORD) {
+    return res.json({ ok: true });
+  }
+  return res.status(403).json({ ok: false, error: 'Contraseña incorrecta' });
+});
+
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 
 app.get('/api/auth/linkedin', (req, res) => {
@@ -123,8 +137,13 @@ async function requireAuth(req, res, next) {
 // ─── PUBLISH ──────────────────────────────────────────────────────────────────
 
 app.post('/api/publish', requireAuth, async (req, res) => {
-  const { text, scheduledAt } = req.body;
+  const { text, scheduledAt, publishPassword } = req.body;
   if (!text) return res.status(400).json({ error: 'Missing text' });
+
+  // Verificar contraseña de publicación (segunda barrera de seguridad)
+  if (process.env.PUBLISH_PASSWORD && publishPassword !== process.env.PUBLISH_PASSWORD) {
+    return res.status(403).json({ error: 'wrong_publish_password', detail: 'Contraseña de publicación incorrecta.' });
+  }
 
   // If scheduled for the future, save it
   if (scheduledAt && new Date(scheduledAt) > new Date()) {
@@ -393,6 +412,38 @@ app.get('/api/search-history', async (req, res) => {
   }
 });
 
+// ─── FUENTES (gestión) ────────────────────────────────────────────────────────
+app.get('/api/sources', async (req, res) => {
+  try {
+    const rows = await sbGet('sources', '?select=*&order=created_at.asc');
+    res.json(rows || []);
+  } catch(e) { res.json([]); }
+});
+
+app.post('/api/sources', async (req, res) => {
+  const { name, url } = req.body;
+  if (!name) return res.status(400).json({ error: 'Falta el nombre' });
+  try {
+    const row = await sbUpsert('sources', { name, url: url || null, active: true });
+    res.json(row[0] || { ok: true });
+  } catch(e) { res.status(500).json({ error: 'No se pudo añadir' }); }
+});
+
+app.patch('/api/sources/:id', async (req, res) => {
+  const { active } = req.body;
+  try {
+    await axios.patch(`${SB_URL}/rest/v1/sources?id=eq.${req.params.id}`, { active }, { headers: sbHeaders });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: 'No se pudo actualizar' }); }
+});
+
+app.delete('/api/sources/:id', async (req, res) => {
+  try {
+    await sbDelete('sources', `?id=eq.${req.params.id}`);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: 'No se pudo borrar' }); }
+});
+
 app.post('/api/search-topics', async (req, res) => {
   const { sector } = req.body;
 
@@ -414,66 +465,64 @@ app.post('/api/search-topics', async (req, res) => {
     }
   } catch(e) { console.error('Rate limit check error:', e.response?.data || e.message); }
 
+  // Cargar fuentes activas desde Supabase
+  let sourcesList = '';
+  try {
+    const srcs = await sbGet('sources', '?active=eq.true&select=name,url');
+    if (srcs && srcs.length) {
+      sourcesList = srcs.map(s => s.name + (s.url ? ' ('+s.url+')' : '')).join(', ');
+    }
+  } catch(e) { console.error('Sources load error:', e.message); }
+
   const headers = {
     'x-api-key': process.env.ANTHROPIC_API_KEY,
     'anthropic-version': '2023-06-01',
     'Content-Type': 'application/json'
   };
   const now = new Date().toISOString();
-  const userPrompt = `Genera SOLO tendencias o noticias RECIENTES (de los últimos 3 días) sobre: ${sector}.
+  const sourcesLine = sourcesList ? `Prioriza estas fuentes de confianza: ${sourcesList}.` : '';
+  const userPrompt = `Genera SOLO tendencias o noticias RECIENTES (de los últimos 3 días como máximo) sobre: ${sector}.
 Fecha y hora actual de referencia: ${now}.
+${sourcesLine}
 REGLAS ESTRICTAS:
-- Solo incluye temas con engagement "hot" (muy caliente) o "trending" (en tendencia). NO incluyas temas "rising" ni de bajo engagement.
-- Solo noticias o conversaciones de los últimos 3 días. Descarta cualquier cosa más antigua.
-- Devuelve entre 3 y 6 temas (los que realmente cumplan el criterio, no rellenes).
-Devuelve SOLO un array JSON (sin backticks, sin texto extra):
-[{"title":"titular en español max 13 palabras","why":"por qué importa ahora (1 frase)","engagement":"hot|trending","platform":"x|linkedin|web|mixed","eng_reactions":"ej: 8.2k likes","eng_comments":"ej: 1.4k comentarios","tags":["tag1","tag2","tag3"],"angle":"ángulo de opinión para un directivo de Paramount (1 frase)","published":"fecha y hora aprox de la noticia, ej: 'Hoy 09:30' o '2026-06-02 14:00'","url":"enlace directo a la fuente/noticia original (URL real y completa)"}]`;
+- SOLO noticias publicadas en los últimos 3 días. Si una noticia es más antigua, NO la incluyas bajo ningún concepto.
+- Solo temas con engagement "hot" (muy caliente) o "trending" (en tendencia).
+- Es mejor devolver pocos temas (o ninguno) que incluir noticias antiguas. NO rellenes.
+- Cada URL debe ser un enlace REAL y verificado a la noticia original.
+Devuelve SOLO un array JSON (sin backticks, sin texto extra). Si no hay noticias frescas que cumplan, devuelve un array vacío [].
+[{"title":"titular en español max 13 palabras","why":"por qué importa ahora (1 frase)","engagement":"hot|trending","platform":"x|linkedin|web|mixed","eng_reactions":"ej: 8.2k likes","eng_comments":"ej: 1.4k comentarios","tags":["tag1","tag2","tag3"],"angle":"ángulo de opinión para un directivo de Paramount (1 frase)","published":"fecha de la noticia, ej: 'Hoy 09:30' o '2026-06-02'","url":"enlace directo REAL a la noticia original"}]`;
 
-  // INTENTO 1: con búsqueda web (temas reales y actuales de los últimos 3 días)
+  // Búsqueda web (temas reales y frescos de los últimos 3 días)
   try {
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
-      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
-      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas noticias y tendencias REALES de los últimos 3 días, con su enlace original. Respondes SOLO con JSON válido, sin backticks.',
+      max_tokens: 2500,
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas SOLO noticias REALES de los últimos 3 días, con su enlace original verificado. Si no hay nada fresco, devuelves un array vacío. Nunca inventas URLs ni rellenas con noticias antiguas. Respondes SOLO con JSON válido, sin backticks.',
       messages: [{ role: 'user', content: `Busca en internet noticias de los últimos 3 días y luego ${userPrompt}` }]
-    }, { headers, timeout: 20000 });
+    }, { headers, timeout: 45000 });
 
     const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
     const match = text.match(/\[[\s\S]*\]/);
     if (match) {
       let topics = JSON.parse(match[0]);
       topics = topics.filter(t => t.engagement === 'hot' || t.engagement === 'trending');
+      topics = topics.map(t => ({ ...t, source: 'web' }));
       await persistSearch(sector, topics, now);
       return res.json({ topics, searchedAt: now, source: 'web' });
     }
     throw new Error('No JSON in web search response');
   } catch (webErr) {
-    console.error('Web search failed, trying fallback:', webErr.response?.data || webErr.message);
-
-    // INTENTO 2 (plan B): sin búsqueda web, solo IA
-    try {
-      const response = await axios.post('https://api.anthropic.com/v1/messages', {
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
-        system: 'Eres un editor de contenido senior del sector audiovisual y streaming. Respondes SOLO con JSON válido, sin backticks.',
-        messages: [{ role: 'user', content: userPrompt }]
-      }, { headers, timeout: 30000 });
-
-      const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
-      const match = text.match(/\[[\s\S]*\]/);
-      if (match) {
-        let topics = JSON.parse(match[0]);
-        topics = topics.filter(t => t.engagement === 'hot' || t.engagement === 'trending');
-        await persistSearch(sector, topics, now);
-        return res.json({ topics, searchedAt: now, source: 'ai' });
-      }
-      throw new Error('No JSON in fallback response');
-    } catch (fallbackErr) {
-      const detail = fallbackErr.response?.data?.error?.message || fallbackErr.message;
-      console.error('Fallback also failed:', detail);
-      res.status(500).json({ error: 'Search failed', detail });
+    console.error('Web search failed:', webErr.response?.data || webErr.message);
+    // Si la búsqueda web falla del todo, NO rellenamos con IA (evitamos noticias viejas).
+    // Devolvemos "sin novedades" salvo que sea un error de la API (no de contenido).
+    const isApiError = webErr.response?.status === 401 || webErr.response?.status === 400;
+    if (isApiError) {
+      return res.status(500).json({ error: 'Search failed', detail: webErr.response?.data?.error?.message || webErr.message });
     }
+    // Timeout o sin resultados: registramos el intento (para el límite 24h) y devolvemos vacío
+    await persistSearch(sector, [], now);
+    return res.json({ topics: [], searchedAt: now, source: 'web', empty: true });
   }
 });
 
