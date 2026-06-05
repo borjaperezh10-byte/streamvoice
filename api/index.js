@@ -262,24 +262,49 @@ app.delete('/api/posts/:id', requireAuth, (req, res) => {
 // ─── AI GENERATION (proxy to Anthropic) ──────────────────────────────────────
 
 app.post('/api/generate', async (req, res) => {
-  const { topic, profile, tone, length } = req.body;
+  const { topic, profile, tones, length } = req.body;
 
   const lengthMap = {
-    veryshort: 'unos 300 caracteres, muy breve e impactante, como un titular con gancho',
-    short: 'unos 600 caracteres, conciso y directo',
-    medium: 'unos 1000 caracteres, con buen desarrollo del argumento',
-    long: 'unos 1500 caracteres, con profundidad y contexto',
-    verylong: 'unos 2000 caracteres, análisis completo y detallado'
+    l100: 'unos 100 caracteres, ultra breve, como un titular potente con gancho',
+    l300: 'unos 300 caracteres, muy conciso y directo',
+    l500: 'unos 500 caracteres, breve pero con desarrollo',
+    l700: 'unos 700 caracteres, con buen desarrollo del argumento',
+    l1000: 'unos 1000 caracteres, completo y detallado'
   };
 
+  // 38 tonos con su descripción y si llevan emojis
   const toneMap = {
-    opinionado: 'toma una posición clara y directa, bien argumentada, primera persona',
-    reflexivo: 'comparte reflexiones personales desde tu experiencia real, invita a la conversación',
-    divulgativo: 'explica con claridad para profesionales, aporta contexto y datos concretos',
-    provocador: 'lanza una tesis controvertida pero fundamentada, genera debate',
-    narrativo: 'cuenta una historia o anécdota profesional que ilustre el tema',
-    datos: 'apóyate en cifras y estudios del sector para construir el argumento'
+    alegre:{d:'optimista y entusiasta',e:true}, neutro:{d:'sin emociones fuertes, directo y equilibrado',e:false},
+    triste:{d:'expresa pena o melancolía con respeto',e:false}, formal:{d:'lenguaje estructurado y profesional',e:false},
+    informal:{d:'relajado y cercano',e:true}, motivacional:{d:'inspirador y alentador',e:true},
+    humoristico:{d:'con humor y tono juguetón',e:true}, serio:{d:'directo y sin adornos, para temas importantes',e:false},
+    persuasivo:{d:'busca convencer e influir',e:false}, emocional:{d:'expresa sentimientos profundos y empatía',e:true},
+    informativo:{d:'proporciona datos e información relevante',e:false}, inspirador:{d:'motiva a alcanzar metas',e:true},
+    educativo:{d:'enseña algo nuevo o da consejos prácticos',e:false}, conversacional:{d:'como si hablaras con un amigo',e:true},
+    autoritario:{d:'muestra confianza y liderazgo',e:false}, amigable:{d:'cálido y acogedor',e:true},
+    entusiasta:{d:'muestra gran energía y excitación',e:true}, reflexivo:{d:'invita a la reflexión y al pensamiento profundo',e:false},
+    narrativo:{d:'cuenta una historia o anécdota',e:false}, empatico:{d:'muestra comprensión hacia el lector',e:true},
+    desafiante:{d:'retador, saca al lector de su zona de confort',e:false}, optimista:{d:'ve el lado positivo',e:true},
+    analitico:{d:'enfocado en el análisis y los datos',e:false}, humilde:{d:'reconoce limitaciones o aprendizajes',e:false},
+    divertido:{d:'incluye humor o chistes',e:true}, directo:{d:'va al grano, sin rodeos',e:false},
+    provocativo:{d:'invita al debate o la controversia',e:false}, reconfortante:{d:'ofrece consuelo o seguridad',e:true},
+    sorprendente:{d:'revela información impactante o inesperada',e:true}, agradecido:{d:'muestra aprecio o gratitud',e:true},
+    sarcastico:{d:'usa el sarcasmo para hacer un punto',e:true}, esperanzador:{d:'transmite esperanza y positividad',e:true},
+    respetuoso:{d:'muestra respeto y consideración',e:false}, intrigante:{d:'despierta la curiosidad',e:false},
+    apasionado:{d:'muestra pasión y entusiasmo',e:true}, cauteloso:{d:'advierte o aconseja precaución',e:false},
+    resuelto:{d:'muestra determinación y firmeza',e:false}, sonador:{d:'idealista y visionario',e:true},
+    profesional:{d:'serio y centrado en el negocio',e:false}
   };
+
+  // Procesar tonos seleccionados (puede ser array o string)
+  const selectedTones = Array.isArray(tones) ? tones : (tones ? [tones] : ['opinionado']);
+  const validTones = selectedTones.filter(t => toneMap[t]);
+  const toneDescriptions = validTones.map(t => toneMap[t].d).join('; además ');
+  const useEmojis = validTones.some(t => toneMap[t].e);
+  const toneInstruction = toneDescriptions || 'directo y profesional';
+  const emojiRule = useEmojis
+    ? 'Usa algunos emojis con moderación, acordes al tono (1-3 en todo el post).'
+    : 'NO uses emojis, mantén un tono sobrio y profesional.';
 
   try {
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
@@ -292,16 +317,17 @@ app.post('/api/generate', async (req, res) => {
 Tema: ${topic.title}
 Por qué importa: ${topic.why}
 Ángulo: ${topic.angle}
-Tono: ${toneMap[tone] || toneMap.opinionado}
-Longitud: ${lengthMap[length] || lengthMap.medium}
+Tono (combina estos matices en un solo post): ${toneInstruction}
+Longitud objetivo: ${lengthMap[length] || lengthMap.l500}
 
 Escribe el post siguiendo estas reglas:
 1. Primera línea: gancho que para el scroll. Sin frases vacías.
 2. Perspectiva de alguien en distribución y partnerships en Paramount.
 3. Insight que solo un insider del sector podría dar.
-4. Termina con pregunta específica que requiera criterio profesional.
+4. Si la longitud lo permite, termina con una pregunta que invite a comentar.
 5. Saltos de línea entre párrafos (lectura móvil).
-6. 4-6 hashtags de nicho al final: #FAST #OTT #SVOD #CTV #ContentDistribution
+6. ${emojiRule}
+7. OBLIGATORIO: termina SIEMPRE con 3-5 hashtags relevantes al tema concreto del artículo (no genéricos), en una línea aparte. Combina hashtags del sector (#FAST #OTT #SVOD #CTV #Streaming) con hashtags específicos de la noticia.
 
 Solo el texto del post.`
       }]
