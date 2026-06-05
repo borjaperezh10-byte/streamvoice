@@ -2,8 +2,15 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>StreamVoice — Borja Pérez Herraiz</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f0f1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="StreamVoice">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -448,7 +455,7 @@ function showLoading(t){document.getElementById('loadingText').textContent=t;doc
 function hideLoading(){document.getElementById('loadingOverlay').classList.remove('show');}
 async function fetchTopics(){
   const btn=document.getElementById('fetchBtn'),lbl=document.getElementById('fetchLabel');
-  btn.disabled=true;lbl.innerHTML='<span class="spinner"></span> Buscando...';showLoading('Buscando noticias reales de los últimos 3 días... (puede tardar hasta 20s)');
+  btn.disabled=true;lbl.innerHTML='<span class="spinner"></span> Buscando...';showLoading('Buscando noticias reales de los últimos 5 días... (puede tardar hasta 45s)');
   try{
     const r=await fetch('/api/search-topics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sector:currentSector})});
     const data=await r.json();
@@ -471,8 +478,8 @@ async function fetchTopics(){
 }
 function renderTopics(topics,searchedAt){
   const c=document.getElementById('topicsContainer');c.innerHTML='';
-  if(searchedAt){const meta=document.createElement('div');meta.style.cssText='font-size:11px;color:var(--muted);margin-bottom:4px;display:flex;align-items:center;gap:6px';meta.innerHTML='<span style="color:var(--green)">●</span> Última búsqueda: '+fmtDate(searchedAt)+' · '+topics.length+' temas (últimos 3 días)';c.appendChild(meta);}
-  if(!topics.length){c.innerHTML+='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text"><b>Sin novedades frescas</b><br><br>No hay noticias muy calientes o en tendencia de los últimos 3 días para esta categoría ahora mismo. Es mejor esperar a que surja algo de actualidad que publicar contenido desactualizado. Prueba otra temática.</div></div>';return;}
+  if(searchedAt){const meta=document.createElement('div');meta.style.cssText='font-size:11px;color:var(--muted);margin-bottom:4px;display:flex;align-items:center;gap:6px';meta.innerHTML='<span style="color:var(--green)">●</span> Última búsqueda: '+fmtDate(searchedAt)+' · '+topics.length+' temas (últimos 5 días)';c.appendChild(meta);}
+  if(!topics.length){c.innerHTML+='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text"><b>Sin novedades frescas</b><br><br>No hay noticias muy calientes o en tendencia de los últimos 5 días para esta categoría ahora mismo. Es mejor esperar a que surja algo de actualidad que publicar contenido desactualizado. Prueba otra temática.</div></div>';return;}
   const g=document.createElement('div');g.className='topics-grid';
   const em={hot:'🔥 Muy caliente',trending:'📈 En tendencia'};
   const pm={x:{c:'pb-x',l:'𝕏 Twitter'},linkedin:{c:'pb-li',l:'in LinkedIn'},web:{c:'pb-web',l:'🌐 Web'},mixed:{c:'pb-web',l:'🔀 Multi'}};
