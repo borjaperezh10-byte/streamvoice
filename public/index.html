@@ -97,10 +97,28 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .right-panel{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
 .right-scroll{flex:1;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:1.1rem}
 .right-footer{padding:1rem 1.25rem;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
-.tone-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
-.tone-btn{padding:7px 4px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-size:11px;cursor:pointer;text-align:center;transition:all .2s;font-family:'DM Sans',sans-serif;line-height:1.4}
-.tone-btn:hover{border-color:var(--border2);color:var(--text)}
-.tone-btn.active{border-color:var(--accent2);color:var(--accent2);background:rgba(196,79,255,0.08)}
+.tone-dropdown{position:relative}
+.tone-dropdown-trigger{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;font-size:12.5px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;transition:all .2s}
+.tone-dropdown-trigger:hover{border-color:var(--accent2)}
+#toneSelectedText{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.tone-dropdown-menu{display:none;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--surface);border:1px solid var(--border2);border-radius:9px;max-height:260px;overflow-y:auto;z-index:50;padding:5px;box-shadow:0 8px 24px rgba(0,0,0,0.4)}
+.tone-dropdown-menu.show{display:block}
+.tone-option{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;font-size:12.5px;cursor:pointer;transition:all .15s}
+.tone-option:hover{background:var(--surface2)}
+.tone-option.checked{background:rgba(196,79,255,0.1)}
+.tone-check{width:16px;height:16px;border-radius:4px;border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px}
+.tone-option.checked .tone-check{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.tone-emoji{font-size:14px}
+/* Preview estilo LinkedIn */
+.li-preview-card{background:#fff;border-radius:10px;padding:16px;color:#000;max-width:100%}
+.li-preview-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.li-preview-avatar{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#0a66c2,#4fa8ff);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:18px;flex-shrink:0}
+.li-preview-name{font-size:14px;font-weight:600;color:#000;line-height:1.2}
+.li-preview-sub{font-size:12px;color:#666;line-height:1.3}
+.li-preview-sub2{font-size:11px;color:#888;display:flex;align-items:center;gap:3px}
+.li-preview-body{font-size:14px;line-height:1.5;color:#1d1d1d;white-space:pre-wrap;word-break:break-word}
+.li-preview-actions{display:flex;justify-content:space-around;border-top:1px solid #e0e0e0;margin-top:14px;padding-top:8px}
+.li-preview-action{font-size:12px;color:#666;display:flex;align-items:center;gap:5px;padding:6px}
 .length-row{display:flex;align-items:center;gap:10px}
 .length-slider{flex:1;-webkit-appearance:none;height:3px;border-radius:2px;background:var(--border2);outline:none;cursor:pointer}
 .length-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);cursor:pointer}
@@ -183,13 +201,14 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
   </div>
 </div>
 <div class="modal-overlay" id="publishModal">
-  <div class="modal-box">
-    <div class="modal-title">🔒 Confirmar publicación</div>
-    <div class="modal-sub">Vas a publicar este post en tu LinkedIn. Introduce tu contraseña de publicación para confirmar.</div>
+  <div class="modal-box" style="width:440px">
+    <div class="modal-title">👁️ Vista previa · Confirmar publicación</div>
+    <div class="modal-sub">Así se verá tu post en LinkedIn. Revisa y, si todo está bien, introduce tu contraseña de publicación.</div>
+    <div id="liPreview" style="margin-bottom:14px"></div>
     <input type="password" class="modal-input" id="publishPassInput" placeholder="Contraseña de publicación" onkeydown="if(event.key==='Enter')confirmPublish()">
     <div class="modal-actions">
       <button class="modal-btn modal-btn-cancel" onclick="closePublishModal()">Cancelar</button>
-      <button class="modal-btn modal-btn-confirm" onclick="confirmPublish()">Publicar</button>
+      <button class="modal-btn modal-btn-confirm" onclick="confirmPublish()">Publicar ahora</button>
     </div>
     <div class="modal-error" id="publishModalError"></div>
   </div>
@@ -254,18 +273,17 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
   </div>
   <div class="right-panel">
     <div class="right-scroll">
-      <div><div class="sec-label" style="margin-bottom:.6rem">Tono del post</div>
-        <div class="tone-grid">
-          <div class="tone-btn active" onclick="setTone('opinionado',this)">💬<br><span style="font-size:10px">Opinionado</span></div>
-          <div class="tone-btn" onclick="setTone('reflexivo',this)">🪞<br><span style="font-size:10px">Reflexivo</span></div>
-          <div class="tone-btn" onclick="setTone('divulgativo',this)">📚<br><span style="font-size:10px">Divulgativo</span></div>
-          <div class="tone-btn" onclick="setTone('provocador',this)">🔥<br><span style="font-size:10px">Provocador</span></div>
-          <div class="tone-btn" onclick="setTone('narrativo',this)">📖<br><span style="font-size:10px">Narrativo</span></div>
-          <div class="tone-btn" onclick="setTone('datos',this)">📈<br><span style="font-size:10px">Con datos</span></div>
+      <div><div class="sec-label" style="margin-bottom:.6rem">Tono del post <span style="color:var(--muted2);text-transform:none;letter-spacing:0">(elige uno o varios)</span></div>
+        <div class="tone-dropdown">
+          <div class="tone-dropdown-trigger" id="toneTrigger" onclick="toggleToneDropdown()">
+            <span id="toneSelectedText">Opinionado</span>
+            <span style="color:var(--muted)">▾</span>
+          </div>
+          <div class="tone-dropdown-menu" id="toneMenu"></div>
         </div>
       </div>
       <div><div class="sec-label" style="margin-bottom:.6rem">Longitud</div>
-        <div class="length-row"><input type="range" class="length-slider" id="lengthSlider" min="1" max="5" step="1" value="3" oninput="updateLength(this.value)"><span class="length-val" id="lengthLabel">Medio (~1000)</span></div>
+        <div class="length-row"><input type="range" class="length-slider" id="lengthSlider" min="1" max="5" step="1" value="3" oninput="updateLength(this.value)"><span class="length-val" id="lengthLabel">500 caracteres</span></div>
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:7px">
         <div class="sec-label">Borrador</div>
@@ -286,7 +304,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 <div class="loading-overlay" id="loadingOverlay"><div class="loading-spinner"></div><div class="loading-text" id="loadingText">Cargando...</div></div>
 <script>
 let currentSector='streaming SVOD Netflix Disney HBO 2026';
-let currentTone='opinionado',currentLength=3,allTopics=[],currentDraftRaw='',lastTopicIdx=null,isConnected=false,generating=false;
+let selectedTones=['opinionado'],currentLength=3,allTopics=[],currentDraftRaw='',lastTopicIdx=null,isConnected=false,generating=false;
 let historyData2=[];
 // ── Gestión de fuentes ──
 async function loadSources(){
@@ -309,7 +327,40 @@ async function deleteSource(id){
   if(!confirm('¿Eliminar esta fuente?'))return;
   try{await fetch('/api/sources/'+id,{method:'DELETE'});loadSources();}catch(e){}
 }
-const LEN={1:{l:'Muy corto',c:'~300',k:'veryshort'},2:{l:'Corto',c:'~600',k:'short'},3:{l:'Medio',c:'~1000',k:'medium'},4:{l:'Largo',c:'~1500',k:'long'},5:{l:'Muy largo',c:'~2000',k:'verylong'}};
+const LEN={1:{l:'100 caracteres',k:'l100'},2:{l:'300 caracteres',k:'l300'},3:{l:'500 caracteres',k:'l500'},4:{l:'700 caracteres',k:'l700'},5:{l:'1000 caracteres',k:'l1000'}};
+const TONES=[
+  ['alegre','😀','Alegre'],['neutro','😐','Neutro'],['triste','😔','Triste'],['formal','📜','Formal'],
+  ['informal','😄','Informal'],['motivacional','💪','Motivacional'],['humoristico','😂','Humorístico'],['serio','😐','Serio'],
+  ['persuasivo','🤝','Persuasivo'],['emocional','❤️','Emocional'],['informativo','📊','Informativo'],['inspirador','🌟','Inspirador'],
+  ['educativo','📚','Educativo'],['conversacional','👥','Conversacional'],['autoritario','👔','Autoritario'],['amigable','😀','Amigable'],
+  ['entusiasta','😃','Entusiasta'],['reflexivo','🤔','Reflexivo'],['narrativo','📖','Narrativo'],['empatico','💓','Empático'],
+  ['desafiante','😠','Desafiante'],['optimista','🌈','Optimista'],['analitico','📈','Analítico'],['humilde','🙇','Humilde'],
+  ['divertido','😆','Divertido'],['directo','🔍','Directo'],['provocativo','😏','Provocativo'],['reconfortante','😌','Reconfortante'],
+  ['sorprendente','😲','Sorprendente'],['agradecido','🙏','Agradecido'],['sarcastico','😜','Sarcástico'],['esperanzador','🕊️','Esperanzador'],
+  ['respetuoso','🤗','Respetuoso'],['intrigante','🧐','Intrigante'],['apasionado','💖','Apasionado'],['cauteloso','🤚','Cauteloso'],
+  ['resuelto','👊','Resuelto'],['sonador','🌠','Soñador'],['profesional','👔','Profesional']
+];
+const TONE_LABELS={};TONES.forEach(t=>TONE_LABELS[t[0]]=t[2]);
+function buildToneMenu(){
+  const menu=document.getElementById('toneMenu');if(!menu)return;
+  menu.innerHTML=TONES.map(t=>'<div class="tone-option'+(selectedTones.includes(t[0])?' checked':'')+'" onclick="toggleTone(\''+t[0]+'\',event)"><span class="tone-check">'+(selectedTones.includes(t[0])?'✓':'')+'</span><span class="tone-emoji">'+t[1]+'</span><span>'+t[2]+'</span></div>').join('');
+}
+function toggleToneDropdown(){document.getElementById('toneMenu').classList.toggle('show');}
+function toggleTone(t,e){
+  if(e)e.stopPropagation();
+  const i=selectedTones.indexOf(t);
+  if(i>=0){if(selectedTones.length>1)selectedTones.splice(i,1);}else{selectedTones.push(t);}
+  buildToneMenu();updateToneText();
+}
+function updateToneText(){
+  const txt=selectedTones.map(t=>TONE_LABELS[t]).join(', ');
+  document.getElementById('toneSelectedText').textContent=txt||'Elige un tono';
+}
+// Cerrar el desplegable al hacer clic fuera
+document.addEventListener('click',e=>{
+  const dd=document.querySelector('.tone-dropdown');
+  if(dd&&!dd.contains(e.target))document.getElementById('toneMenu')?.classList.remove('show');
+});
 const SECTOR_NAMES={'streaming SVOD Netflix Disney HBO 2026':'Streaming & SVOD','FAST channels free ad-supported TV 2026':'FAST & Free TV','operadores Pay TV cable cord-cutting 2026':'Operadores','producción audiovisual contenidos distribución 2026':'Contenido','CTV programmatic advertising monetización 2026':'Ad Tech & CTV','media deals partnerships distribución OTT 2026':'Partnerships'};
 function fmtDate(iso){try{const d=new Date(iso);return d.toLocaleString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return iso;}}
 async function checkAuth(){
@@ -345,6 +396,10 @@ function openPublishModal(){
   if(!isConnected){alert('Conecta LinkedIn primero.');return;}
   document.getElementById('publishModalError').textContent='';
   document.getElementById('publishPassInput').value='';
+  // Pintar vista previa estilo LinkedIn
+  const safe=currentDraftRaw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  document.getElementById('liPreview').innerHTML=
+    '<div class="li-preview-card"><div class="li-preview-head"><div class="li-preview-avatar">BP</div><div><div class="li-preview-name">Borja Pérez Herraiz</div><div class="li-preview-sub">Affiliates & Business Development Sr. Manager · Paramount</div><div class="li-preview-sub2">Ahora · 🌐</div></div></div><div class="li-preview-body">'+safe+'</div><div class="li-preview-actions"><span class="li-preview-action">👍 Recomendar</span><span class="li-preview-action">💬 Comentar</span><span class="li-preview-action">🔁 Compartir</span><span class="li-preview-action">📤 Enviar</span></div></div>';
   document.getElementById('publishModal').classList.add('show');
   setTimeout(()=>document.getElementById('publishPassInput').focus(),100);
 }
@@ -387,8 +442,7 @@ function renderCost(){
 }
 function showTab(t,el){document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-view').forEach(x=>x.classList.remove('active'));el.classList.add('active');document.getElementById('tab-'+t).classList.add('active');if(t==='metrics')loadMetrics();if(t==='tips')loadTips();}
 function setSector(el,s){document.querySelectorAll('.sector-tag').forEach(x=>x.classList.remove('active'));el.classList.add('active');currentSector=s;}
-function setTone(t,el){document.querySelectorAll('.tone-btn').forEach(x=>x.classList.remove('active'));el.classList.add('active');currentTone=t;}
-function updateLength(v){currentLength=parseInt(v);document.getElementById('lengthLabel').textContent=LEN[v].l+' ('+LEN[v].c+')';}
+function updateLength(v){currentLength=parseInt(v);document.getElementById('lengthLabel').textContent=LEN[v].l;}
 function filterTopics(q){q=q.toLowerCase();document.querySelectorAll('.topic-card').forEach(c=>{c.style.display=c.dataset.title.toLowerCase().includes(q)?'':'none';});}
 function showLoading(t){document.getElementById('loadingText').textContent=t;document.getElementById('loadingOverlay').classList.add('show');}
 function hideLoading(){document.getElementById('loadingOverlay').classList.remove('show');}
@@ -465,7 +519,7 @@ async function generateDraft(idx,e){
   da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon"><span class="spinner" style="border-top-color:var(--accent);border-color:var(--border2);width:20px;height:20px"></span></div><div class="draft-placeholder-text" style="margin-top:8px">Generando...</div></div>';
   showLoading('Redactando con tu voz...');
   try{
-    const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,profile:document.getElementById('profileInput').value,tone:currentTone,length:LEN[currentLength].k})});
+    const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,profile:document.getElementById('profileInput').value,tones:selectedTones,length:LEN[currentLength].k})});
     const d=await r.json();currentDraftRaw=d.text||'Error.';
     da.innerHTML='<div class="draft-text">'+currentDraftRaw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
     document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
@@ -496,6 +550,7 @@ function initApp(){
   fillCostMonths();renderCost();
   loadHistoryFromDB();
   loadSources();
+  buildToneMenu();updateToneText();
 }
 // Si volvemos de conectar LinkedIn, saltamos el lock (ya estaba desbloqueado antes)
 if(window.location.search.includes('connected=true')){
