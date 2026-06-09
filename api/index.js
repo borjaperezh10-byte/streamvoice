@@ -447,10 +447,10 @@ app.get('/api/sources', async (req, res) => {
 });
 
 app.post('/api/sources', async (req, res) => {
-  const { name, url } = req.body;
+  const { name, url, description } = req.body;
   if (!name) return res.status(400).json({ error: 'Falta el nombre' });
   try {
-    const row = await sbUpsert('sources', { name, url: url || null, active: true });
+    const row = await sbUpsert('sources', { name, url: url || null, description: description || null, active: true, category: 'propias' });
     res.json(row[0] || { ok: true });
   } catch(e) { res.status(500).json({ error: 'No se pudo añadir' }); }
 });
