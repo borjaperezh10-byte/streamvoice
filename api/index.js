@@ -356,44 +356,77 @@ app.post('/api/generate', async (req, res) => {
     ? 'Usa algunos emojis con moderación, acordes al tono (1-3 en todo el post).'
     : 'NO uses emojis, mantén un tono sobrio y profesional.';
 
-  try {
-    const response = await axios.post('https://api.anthropic.com/v1/messages', {
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1000,
-      system: `Eres el ghostwriter personal de Borja Pérez Herraiz, Affiliates & Business Development Sr. Manager en Paramount International, con +15 años en distribución multiplataforma, OTT, FAST, SVOD y partnerships. Escribes posts de LinkedIn con su voz: directa, experta, sin corporativismos. Español.`,
-      messages: [{
-        role: 'user',
-        content: `Perfil: ${profile}
-Tema: ${topic.title}
+  const lang = (req.body.lang === 'en') ? 'en' : 'es';
+  const langInstruction = lang === 'en'
+    ? 'Write the post in ENGLISH (professional LinkedIn English).'
+    : 'Escribe el post en ESPAÑOL.';
+
+  // Fuente del contenido: tema descubierto, o enlace/texto propio del usuario
+  const customSource = req.body.customSource; // { url, text } opcional
+  let sourceBlock;
+  if (customSource && (customSource.url || customSource.text)) {
+    sourceBlock = `El usuario aporta esta fuente para comentar:
+${customSource.url ? 'URL: ' + customSource.url : ''}
+${customSource.text ? 'Texto/contexto: ' + customSource.text : ''}
+Basa el post en esta fuente. Si hay datos o cifras concretas, ÚSALOS.`;
+  } else {
+    sourceBlock = `Tema: ${topic.title}
 Por qué importa: ${topic.why}
-Ángulo: ${topic.angle}
-Tono (combina estos matices en un solo post): ${toneInstruction}
+Ángulo: ${topic.angle}`;
+  }
+
+  try {
+    const messages = [{
+      role: 'user',
+      content: `Perfil del autor: ${profile}
+
+${sourceBlock}
+
+Tono (combina estos matices): ${toneInstruction}
+Idioma: ${langInstruction}
 Longitud objetivo: ${lengthMap[length] || lengthMap.l500}
 
-Escribe el post siguiendo estas reglas:
-1. Primera línea: gancho que para el scroll. Sin frases vacías.
-2. Perspectiva de alguien en distribución y partnerships en Paramount.
-3. Insight que solo un insider del sector podría dar.
-4. Si la longitud lo permite, termina con una pregunta que invite a comentar.
-5. Saltos de línea entre párrafos (lectura móvil).
-6. ${emojiRule}
-7. OBLIGATORIO: termina SIEMPRE con 3-5 hashtags relevantes al tema concreto del artículo (no genéricos), en una línea aparte. Combina hashtags del sector (#FAST #OTT #SVOD #CTV #Streaming) con hashtags específicos de la noticia.
+ESTILO OBLIGATORIO (muy importante, imita este estilo):
+- Empieza con una afirmación directa y concreta, idealmente con un dato o cifra que impacte. Nada de "Hoy quiero hablar de" ni frases motivacionales vacías.
+- Cita fuentes y nombres reales cuando existan (ej: "según PwC...", nombres de empresas, plataformas, cifras de mercado).
+- Incluye datos concretos: cifras, porcentajes, montos, fechas. Si la fuente los tiene, úsalos.
+- Incluye un apartado "Why it matters:" (o "Por qué importa:" en español) con la lectura profesional para alguien del sector.
+- Tono directo, sustancioso, de analista experto. CERO relleno motivacional, cero frases huecas.
+- Prioriza el ángulo de negocio: distribución, partnerships, monetización, estrategia.
+- ${emojiRule}
+- Termina con 4-8 hashtags relevantes y específicos al tema (mezcla sector + nombres propios mencionados), en una línea aparte.
 
-Solo el texto del post.`
-      }]
-    }, {
+${customSource ? '' : 'Si el tema afecta a España o Portugal, dale especial relevancia a ese ángulo local.'}
+
+Solo el texto del post, listo para copiar.`
+    }];
+
+    // Si hay URL propia, usar búsqueda web para que lea el contenido real
+    const body = {
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1200,
+      system: `Eres el ghostwriter personal de Borja Pérez Herraiz, Affiliates & Business Development Sr. Manager en Paramount International (+15 años en distribución multiplataforma, OTT, FAST, SVOD, partnerships). Escribes posts de LinkedIn al estilo de un analista senior del sector: directos, con datos y cifras, citando fuentes reales, con un "Why it matters" claro. Nada de relleno motivacional.`,
+      messages
+    };
+    if (customSource && customSource.url) {
+      body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }];
+      body.messages[0].content = `Lee el contenido de esta URL: ${customSource.url}\n\n` + body.messages[0].content;
+    }
+
+    const response = await axios.post('https://api.anthropic.com/v1/messages', body, {
       headers: {
         'x-api-key': process.env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json'
-      }
+      },
+      timeout: customSource && customSource.url ? 45000 : 30000
     });
 
     const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
     res.json({ text });
   } catch (err) {
     console.error('Generate error:', err.response?.data || err.message);
-    res.status(500).json({ error: 'Generation failed' });
+    res.status(500).json({ error: 'Generation failed', detail: err.response?.data?.error?.message || err.message });
   }
 });
 
@@ -563,6 +596,7 @@ ${sourcesLine}
 REGLAS ESTRICTAS:
 - SOLO noticias publicadas en los últimos 5 días. Si una noticia es más antigua, NO la incluyas bajo ningún concepto.
 - Solo temas con engagement "hot" (muy caliente) o "trending" (en tendencia).
+- PRIORIZA noticias que afecten a España o Portugal (mercado ibérico). Si hay noticias relevantes de esos mercados, ponlas primero. Noticias globales solo como complemento.
 - Es mejor devolver pocos temas (o ninguno) que incluir noticias antiguas. NO rellenes.
 - Cada URL debe ser un enlace REAL y verificado a la noticia original.
 Devuelve SOLO un array JSON (sin backticks, sin texto extra). Si no hay noticias frescas que cumplan, devuelve un array vacío [].
