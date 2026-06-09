@@ -145,56 +145,106 @@ app.post('/api/publish', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'wrong_publish_password', detail: 'Contraseña de publicación incorrecta.' });
   }
 
-  // If scheduled for the future, save it
-  if (scheduledAt && new Date(scheduledAt) > new Date()) {
-    const post = {
-      id: Date.now().toString(),
-      body: text,
-      scheduledAt,
-      status: 'scheduled',
-      createdAt: new Date().toISOString()
-    };
-    store.posts.push(post);
-    return res.json({ ok: true, status: 'scheduled', post });
-  }
-
   // Publish now
   try {
-    const authorId = req.linkedinSession.profile?.sub;
-    const payload = {
-      author: `urn:li:person:${authorId}`,
-      lifecycleState: 'PUBLISHED',
-      specificContent: {
-        'com.linkedin.ugc.ShareContent': {
-          shareCommentary: { text },
-          shareMediaCategory: 'NONE'
-        }
-      },
-      visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
-    };
-
-    const publishRes = await axios.post('https://api.linkedin.com/v2/ugcPosts', payload, {
-      headers: {
-        Authorization: `Bearer ${req.linkedinSession.accessToken}`,
-        'Content-Type': 'application/json',
-        'X-Restli-Protocol-Version': '2.0.0'
-      }
-    });
-
-    const linkedinId = publishRes.data.id;
-    const post = {
-      id: Date.now().toString(),
-      linkedinId,
-      body: text,
-      publishedAt: new Date().toISOString(),
-      status: 'published'
-    };
-    store.posts.push(post);
-
-    res.json({ ok: true, status: 'published', linkedinId, post });
+    const result = await publishToLinkedIn(text, req.linkedinSession);
+    res.json({ ok: true, status: 'published', linkedinId: result.linkedinId });
   } catch (err) {
     console.error('Publish error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Failed to publish', detail: err.response?.data });
+  }
+});
+
+// Función reutilizable para publicar en LinkedIn
+async function publishToLinkedIn(text, session) {
+  const authorId = session.profile?.sub;
+  const payload = {
+    author: `urn:li:person:${authorId}`,
+    lifecycleState: 'PUBLISHED',
+    specificContent: {
+      'com.linkedin.ugc.ShareContent': {
+        shareCommentary: { text },
+        shareMediaCategory: 'NONE'
+      }
+    },
+    visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
+  };
+  const publishRes = await axios.post('https://api.linkedin.com/v2/ugcPosts', payload, {
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+      'Content-Type': 'application/json',
+      'X-Restli-Protocol-Version': '2.0.0'
+    }
+  });
+  return { linkedinId: publishRes.data.id };
+}
+
+// ─── PROGRAMACIÓN DE POSTS ──────────────────────────────────────────────────
+// Programar un post para el futuro
+app.post('/api/schedule', requireAuth, async (req, res) => {
+  const { text, scheduledAt, publishPassword } = req.body;
+  if (!text || !scheduledAt) return res.status(400).json({ error: 'Faltan datos' });
+  if (process.env.PUBLISH_PASSWORD && publishPassword !== process.env.PUBLISH_PASSWORD) {
+    return res.status(403).json({ error: 'wrong_publish_password', detail: 'Contraseña de publicación incorrecta.' });
+  }
+  if (new Date(scheduledAt) <= new Date()) {
+    return res.status(400).json({ error: 'La fecha debe ser futura' });
+  }
+  try {
+    await sbUpsert('scheduled_posts', { text, scheduled_at: scheduledAt, status: 'pending' });
+    res.json({ ok: true });
+  } catch(e) {
+    res.status(500).json({ error: 'No se pudo programar', detail: e.message });
+  }
+});
+
+// Listar posts programados
+app.get('/api/scheduled', async (req, res) => {
+  try {
+    const rows = await sbGet('scheduled_posts', '?select=*&order=scheduled_at.asc');
+    res.json(rows || []);
+  } catch(e) { res.json([]); }
+});
+
+// Cancelar/borrar un post programado
+app.delete('/api/scheduled/:id', async (req, res) => {
+  try {
+    await sbDelete('scheduled_posts', `?id=eq.${req.params.id}`);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: 'No se pudo borrar' }); }
+});
+
+// Endpoint que llama cron-job.org: publica los posts cuya hora ya llegó
+app.get('/api/cron/publish-due', async (req, res) => {
+  // Seguridad: requiere un token secreto para que no lo llame cualquiera
+  if (req.query.token !== process.env.CRON_SECRET) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  try {
+    const session = await loadSession();
+    if (!session || !session.accessToken || session.tokenExpiry < Date.now()) {
+      return res.json({ ok: false, reason: 'LinkedIn no conectado o sesión expirada' });
+    }
+    const nowIso = new Date().toISOString();
+    const due = await sbGet('scheduled_posts', `?status=eq.pending&scheduled_at=lte.${nowIso}&select=*`);
+    const results = [];
+    for (const post of (due || [])) {
+      try {
+        const result = await publishToLinkedIn(post.text, session);
+        await axios.patch(`${SB_URL}/rest/v1/scheduled_posts?id=eq.${post.id}`,
+          { status: 'published', published_at: new Date().toISOString(), linkedin_id: result.linkedinId },
+          { headers: sbHeaders });
+        results.push({ id: post.id, status: 'published' });
+      } catch(err) {
+        await axios.patch(`${SB_URL}/rest/v1/scheduled_posts?id=eq.${post.id}`,
+          { status: 'error', error: (err.response?.data?.message || err.message || '').slice(0,200) },
+          { headers: sbHeaders });
+        results.push({ id: post.id, status: 'error' });
+      }
+    }
+    res.json({ ok: true, processed: results.length, results });
+  } catch(e) {
+    res.status(500).json({ error: 'cron failed', detail: e.message });
   }
 });
 
