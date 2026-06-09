@@ -217,6 +217,15 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .sched-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .sched-when{font-size:13px;font-weight:500;color:var(--accent)}
 .sched-card-text{font-size:12.5px;color:var(--muted);line-height:1.5;white-space:pre-wrap}
+.lang-row{display:flex;gap:6px}
+.lang-btn{flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:8px;font-size:12.5px;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s}
+.lang-btn:hover{color:var(--text)}
+.lang-btn.active{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent)}
+.custom-gen-btn{width:100%;background:var(--surface3);border:1px solid var(--border2);border-radius:8px;padding:9px;font-size:12.5px;color:var(--text);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;margin-top:4px}
+.custom-gen-btn:hover{border-color:var(--accent);color:var(--accent)}
+.sched-main-btn{flex:1;background:var(--surface2);border:1px solid var(--accent-border);border-radius:7px;padding:10px;color:var(--accent);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:6px}
+.sched-main-btn:hover{background:var(--accent-dim)}
+.sched-main-btn:disabled{opacity:.4;cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -326,6 +335,12 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
   </div>
   <div class="right-panel">
     <div class="right-scroll">
+      <div><div class="sec-label" style="margin-bottom:.6rem">Idioma</div>
+        <div class="lang-row">
+          <button class="lang-btn active" data-lang="es" onclick="setLang('es',this)">🇪🇸 Español</button>
+          <button class="lang-btn" data-lang="en" onclick="setLang('en',this)">🇬🇧 English</button>
+        </div>
+      </div>
       <div><div class="sec-label" style="margin-bottom:.6rem">Tono del post <span style="color:var(--muted2);text-transform:none;letter-spacing:0">(elige uno o varios)</span></div>
         <div class="tone-dropdown">
           <div class="tone-dropdown-trigger" id="toneTrigger" onclick="toggleToneDropdown()">
@@ -338,6 +353,11 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
       <div><div class="sec-label" style="margin-bottom:.6rem">Longitud</div>
         <div class="length-row"><input type="range" class="length-slider" id="lengthSlider" min="1" max="5" step="1" value="3" oninput="updateLength(this.value)"><span class="length-val" id="lengthLabel">500 caracteres</span></div>
       </div>
+      <div><div class="sec-label" style="margin-bottom:.6rem">O genera desde tu propio enlace</div>
+        <input type="text" id="customUrl" class="src-input" placeholder="Pega una URL de noticia...">
+        <textarea id="customText" class="src-input" rows="2" placeholder="...o pega aquí el texto/titular (opcional)" style="resize:none"></textarea>
+        <button class="custom-gen-btn" onclick="generateFromCustom()" title="Coste estimado: ~$0.01-0.04">✨ Generar desde mi enlace/texto</button>
+      </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:7px">
         <div class="sec-label">Borrador</div>
         <div class="draft-area" id="draftArea"><div class="draft-placeholder"><div class="draft-placeholder-icon">✍️</div><div class="draft-placeholder-text">Selecciona un tema y pulsa "Generar post"</div></div></div>
@@ -346,8 +366,11 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
     </div>
     <div class="right-footer">
       <div class="action-row">
-        <button class="pub-btn" id="pubBtn" onclick="openPublishModal()" disabled>📤 Publicar en LinkedIn</button>
-        <button class="copy-btn" onclick="copyDraft()" title="Copiar el texto al portapapeles">📋 Copiar</button>
+        <button class="pub-btn" id="pubBtn" onclick="openPublishModal('now')" disabled>📤 Publicar ahora</button>
+        <button class="sched-main-btn" id="schedBtn" onclick="openPublishModal('schedule')" disabled>📅 Programar</button>
+      </div>
+      <div class="action-row">
+        <button class="copy-btn" style="flex:1" onclick="copyDraft()" title="Copiar el texto al portapapeles">📋 Copiar</button>
         <button class="icon-btn" onclick="regenDraft()" title="Generar otra versión del mismo post · Coste estimado: ~$0.01">🔄 Regenerar</button>
       </div>
     </div>
@@ -357,7 +380,8 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 <div class="loading-overlay" id="loadingOverlay"><div class="loading-spinner"></div><div class="loading-text" id="loadingText">Cargando...</div></div>
 <script>
 let currentSector='streaming SVOD Netflix Disney HBO 2026';
-let selectedTones=['opinionado'],currentLength=3,allTopics=[],currentDraftRaw='',lastTopicIdx=null,isConnected=false,generating=false;
+let selectedTones=['opinionado'],currentLength=3,allTopics=[],currentDraftRaw='',lastTopicIdx=null,isConnected=false,generating=false,currentLang='es';
+function setLang(l,btn){currentLang=l;document.querySelectorAll('.lang-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
 let historyData2=[];
 // ── Gestión de fuentes ──
 const CAT_LABELS={medios:'📰 Medios especializados',sector:'📺 Sector audiovisual',tech:'⚙️ Tecnología y Ad Tech',general:'🌐 Generalistas',propias:'⭐ Fuentes propias'};
@@ -446,8 +470,8 @@ async function checkAuth(){
   try{
     const r=await fetch('/api/auth/status');const d=await r.json();isConnected=d.connected;
     const el=document.getElementById('liStatus');
-    if(d.connected){const name=d.profile?.name||d.profile?.given_name||'Borja Pérez Herraiz';el.innerHTML='<div class="li-connected"><div class="li-dot"></div>Conectado: '+name+'</div><button class="li-disconnect-btn" onclick="disconnectLinkedIn()">Desconectar</button>';document.getElementById('pubBtn').disabled=false;}
-    else{el.innerHTML='<button class="li-connect-btn" onclick="connectLinkedIn()">🔗 Conectar LinkedIn</button>';document.getElementById('pubBtn').disabled=true;}
+    if(d.connected){const name=d.profile?.name||d.profile?.given_name||'Borja Pérez Herraiz';el.innerHTML='<div class="li-connected"><div class="li-dot"></div>Conectado: '+name+'</div><button class="li-disconnect-btn" onclick="disconnectLinkedIn()">Desconectar</button>';document.getElementById('pubBtn').disabled=false;document.getElementById('schedBtn').disabled=false;}
+    else{el.innerHTML='<button class="li-connect-btn" onclick="connectLinkedIn()">🔗 Conectar LinkedIn</button>';document.getElementById('pubBtn').disabled=true;document.getElementById('schedBtn').disabled=true;}
   }catch(e){}
 }
 function connectLinkedIn(){window.location.href='/api/auth/linkedin';}
@@ -470,7 +494,7 @@ async function tryUnlock(){
   }catch(e){err.textContent='Error de conexión';}
 }
 // ── Modal de publicación con contraseña ──
-function openPublishModal(){
+function openPublishModal(mode){
   if(!currentDraftRaw){alert('Genera un post primero.');return;}
   if(!isConnected){alert('Conecta LinkedIn primero.');return;}
   document.getElementById('publishModalError').textContent='';
@@ -480,10 +504,18 @@ function openPublishModal(){
   document.getElementById('liPreview').innerHTML=
     '<div class="li-preview-card"><div class="li-preview-head"><div class="li-preview-avatar">BP</div><div><div class="li-preview-name">Borja Pérez Herraiz</div><div class="li-preview-sub">Affiliates & Business Development Sr. Manager · Paramount</div><div class="li-preview-sub2">Ahora · 🌐</div></div></div><div class="li-preview-body">'+safe+'</div><div class="li-preview-actions"><span class="li-preview-action">👍 Recomendar</span><span class="li-preview-action">💬 Comentar</span><span class="li-preview-action">🔁 Compartir</span><span class="li-preview-action">📤 Enviar</span></div></div>';
   document.getElementById('publishModal').classList.add('show');
-  scheduleWhen='now';
-  document.querySelectorAll('.sched-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
-  document.getElementById('schedDatetime').style.display='none';
-  document.getElementById('confirmPublishBtn').textContent='Publicar ahora';
+  // Preseleccionar según el botón pulsado
+  if(mode==='schedule'){
+    scheduleWhen='3h';
+    document.querySelectorAll('.sched-btn').forEach(b=>b.classList.toggle('active',b.dataset.when==='3h'));
+    document.getElementById('schedDatetime').style.display='none';
+    document.getElementById('confirmPublishBtn').textContent='Programar publicación';
+  }else{
+    scheduleWhen='now';
+    document.querySelectorAll('.sched-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
+    document.getElementById('schedDatetime').style.display='none';
+    document.getElementById('confirmPublishBtn').textContent='Publicar ahora';
+  }
   setTimeout(()=>document.getElementById('publishPassInput').focus(),100);
 }
 function closePublishModal(){document.getElementById('publishModal').classList.remove('show');}
@@ -648,7 +680,7 @@ async function generateDraft(idx,e){
   da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon"><span class="spinner" style="border-top-color:var(--accent);border-color:var(--border2);width:20px;height:20px"></span></div><div class="draft-placeholder-text" style="margin-top:8px">Generando...</div></div>';
   showLoading('Redactando con tu voz...');
   try{
-    const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,profile:document.getElementById('profileInput').value,tones:selectedTones,length:LEN[currentLength].k})});
+    const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,profile:document.getElementById('profileInput').value,tones:selectedTones,length:LEN[currentLength].k,lang:currentLang})});
     const d=await r.json();currentDraftRaw=d.text||'Error.';
     da.innerHTML='<div class="draft-text">'+currentDraftRaw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
     document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
@@ -658,6 +690,28 @@ async function generateDraft(idx,e){
   hideLoading();generating=false;
 }
 function regenDraft(){if(lastTopicIdx!==null)generateDraft(lastTopicIdx,null);}
+async function generateFromCustom(){
+  const url=document.getElementById('customUrl').value.trim();
+  const text=document.getElementById('customText').value.trim();
+  if(!url&&!text){alert('Pega una URL o un texto para generar el post.');return;}
+  if(generating)return;generating=true;
+  const da=document.getElementById('draftArea');
+  da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon"><span class="spinner" style="border-top-color:var(--accent);border-color:var(--border2);width:20px;height:20px"></span></div><div class="draft-placeholder-text" style="margin-top:8px">Generando desde tu fuente...</div></div>';
+  showLoading(url?'Leyendo tu enlace y redactando...':'Redactando desde tu texto...');
+  try{
+    const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile:document.getElementById('profileInput').value,tones:selectedTones,length:LEN[currentLength].k,lang:currentLang,customSource:{url,text}})});
+    const d=await r.json();currentDraftRaw=d.text||'Error.';
+    if(d.error){da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon">⚠️</div><div class="draft-placeholder-text">Error: '+(d.detail||d.error)+'</div></div>';}
+    else{
+      da.innerHTML='<div class="draft-text">'+currentDraftRaw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+      document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
+      const st=document.getElementById('charStatus');st.textContent='✓ Listo';st.style.color='var(--green)';
+      document.getElementById('pubBtn').disabled=!isConnected;document.getElementById('schedBtn').disabled=!isConnected;
+      addUsage('post');
+    }
+  }catch(e){da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon">⚠️</div><div class="draft-placeholder-text">Error al generar.</div></div>';}
+  hideLoading();generating=false;
+}
 function copyDraft(){if(currentDraftRaw)navigator.clipboard.writeText(currentDraftRaw);}
 async function loadMetrics(){
   if(!isConnected){document.getElementById('metricsContainer').innerHTML='';return;}
