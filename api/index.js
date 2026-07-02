@@ -524,8 +524,11 @@ app.get('/api/best-times', requireAuth, (req, res) => {
 // Guarda la búsqueda en el historial y actualiza el límite de 24h
 async function persistSearch(sector, topics, searchedAt) {
   try {
-    await sbUpsert('searches', { sector, sector_name: sector, topics, searched_at: searchedAt });
-    await sbUpsert('rate_limit', { sector, last_search: searchedAt });
+    // Solo guardamos en historial y activamos el límite de 24h si hubo resultados reales
+    if (topics && topics.length) {
+      await sbUpsert('searches', { sector, sector_name: sector, topics, searched_at: searchedAt });
+      await sbUpsert('rate_limit', { sector, last_search: searchedAt });
+    }
   } catch(e) { console.error('persistSearch error:', e.response?.data || e.message); }
 }
 
@@ -632,27 +635,41 @@ Devuelve SOLO un array JSON (sin backticks, sin texto extra). Si de verdad no ha
     }, { headers, timeout: 55000 });
 
     const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
-    const match = text.match(/\[[\s\S]*\]/);
-    if (match) {
-      let topics = JSON.parse(match[0]);
-      topics = topics.map(t => ({ ...t, source: 'web', scope: t.scope === 'global' ? 'global' : 'espana' }));
-      await persistSearch(sector, topics, now);
-      return res.json({ topics, searchedAt: now, source: 'web' });
+    const topics = extractTopics(text);
+    if (topics && topics.length) {
+      const mapped = topics.map(t => ({ ...t, source: 'web', scope: t.scope === 'global' ? 'global' : 'espana' }));
+      await persistSearch(sector, mapped, now);
+      return res.json({ topics: mapped, searchedAt: now, source: 'web' });
     }
-    throw new Error('No JSON in web search response');
-  } catch (webErr) {
-    console.error('Web search failed:', webErr.response?.data || webErr.message);
-    // Si la búsqueda web falla del todo, NO rellenamos con IA (evitamos noticias viejas).
-    // Devolvemos "sin novedades" salvo que sea un error de la API (no de contenido).
-    const isApiError = webErr.response?.status === 401 || webErr.response?.status === 400;
-    if (isApiError) {
-      return res.status(500).json({ error: 'Search failed', detail: webErr.response?.data?.error?.message || webErr.message });
-    }
-    // Timeout o sin resultados: registramos el intento (para el límite 24h) y devolvemos vacío
+    // La búsqueda respondió pero no pudimos extraer temas: devolver vacío real
+    console.error('No topics parsed. Raw text (first 500):', text.slice(0, 500));
     await persistSearch(sector, [], now);
-    return res.json({ topics: [], searchedAt: now, source: 'web', empty: true });
+    return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: 'no_parse' });
+  } catch (webErr) {
+    const detail = webErr.response?.data?.error?.message || webErr.message;
+    console.error('Web search failed:', detail);
+    const isTimeout = webErr.code === 'ECONNABORTED' || /timeout/i.test(detail || '');
+    // Devolvemos el motivo para que el frontend pueda distinguir error técnico de vacío real
+    return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: isTimeout ? 'timeout' : 'error', detail });
   }
 });
+
+// Extrae el array de temas de la respuesta, de forma robusta
+function extractTopics(text) {
+  if (!text) return null;
+  // Quitar backticks de markdown si los hay
+  let clean = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+  // Intento 1: parseo directo si todo es JSON
+  try { const p = JSON.parse(clean); if (Array.isArray(p)) return p; } catch(e) {}
+  // Intento 2: buscar el primer '[' y hacer parseo incremental hasta el ']' que cierra bien
+  const start = clean.indexOf('[');
+  if (start === -1) return null;
+  for (let end = clean.lastIndexOf(']'); end > start; end = clean.lastIndexOf(']', end - 1)) {
+    const candidate = clean.slice(start, end + 1);
+    try { const p = JSON.parse(candidate); if (Array.isArray(p)) return p; } catch(e) {}
+  }
+  return null;
+}
 
 // ─── EXPORT (Vercel serverless) ─────────────────────────────────────────────
 // En Vercel se exporta la app directamente.
