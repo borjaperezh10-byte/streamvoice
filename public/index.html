@@ -72,6 +72,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .profile-block{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px}
 .profile-block textarea{background:transparent;border:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;width:100%;outline:none;resize:none;line-height:1.6}
 .credit{font-size:11px;color:var(--muted2);text-align:center}.credit span{color:var(--muted)}
+.version-tag{display:inline-block;margin-top:4px;font-size:10px;color:var(--muted2);opacity:.7}
 .cost-widget{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:11px 12px;margin-bottom:12px}
 .cost-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .cost-label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
@@ -297,7 +298,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="cost-amount" id="costAmount">$0.00</div>
         <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
       </div>
-      <div class="credit">Creado por <span>Borja Pérez Herraiz</span></div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v2.0 · 2 jul 2026</span></div>
     </div>
   </div>
   <div class="tab-view active" id="tab-discover">
@@ -618,6 +619,8 @@ async function fetchTopics(){
     const data=await r.json();
     if(data.error==='rate_limited'){
       document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text"><b>Límite de 24h activo</b><br><br>'+data.detail+'<br><br><span style="font-size:11px;color:var(--muted2)">Última búsqueda: '+fmtDate(data.lastSearch)+'</span></div></div>';
+    }else if(data.empty && data.reason==='all_old'){
+      document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text"><b>Sin novedades de esta semana</b><br><br>Se encontraron noticias, pero todas tenían más de 7 días. Para LinkedIn no interesa contenido antiguo. Prueba otra temática o vuelve más tarde.</div></div>';
     }else if(data.empty && (data.reason==='timeout'||data.reason==='error')){
       const c=document.getElementById('topicsContainer');
       c.innerHTML='<div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-text"><b>La búsqueda no respondió a tiempo</b><br><br>No es que no haya noticias — la búsqueda web se ha demorado o ha fallado. Pulsa "Actualizar" para reintentar (no consume tu límite de 24h).<br><br><span style="font-size:11px;color:var(--muted2)">'+(data.detail||data.reason)+'</span></div></div>';
