@@ -158,15 +158,25 @@ app.post('/api/publish', requireAuth, async (req, res) => {
 // Función reutilizable para publicar en LinkedIn
 async function publishToLinkedIn(text, session) {
   const authorId = session.profile?.sub;
+  // Detectar si el post contiene una URL → declararla como artículo para que salga el preview
+  const urlMatch = text.match(/https?:\/\/[^\s]+/);
+  let shareContent;
+  if (urlMatch) {
+    shareContent = {
+      shareCommentary: { text },
+      shareMediaCategory: 'ARTICLE',
+      media: [{ status: 'READY', originalUrl: urlMatch[0] }]
+    };
+  } else {
+    shareContent = {
+      shareCommentary: { text },
+      shareMediaCategory: 'NONE'
+    };
+  }
   const payload = {
     author: `urn:li:person:${authorId}`,
     lifecycleState: 'PUBLISHED',
-    specificContent: {
-      'com.linkedin.ugc.ShareContent': {
-        shareCommentary: { text },
-        shareMediaCategory: 'NONE'
-      }
-    },
+    specificContent: { 'com.linkedin.ugc.ShareContent': shareContent },
     visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
   };
   const publishRes = await axios.post('https://api.linkedin.com/v2/ugcPosts', payload, {
@@ -422,8 +432,16 @@ Solo el texto del post, listo para copiar.`
       timeout: customSource && customSource.url ? 45000 : 30000
     });
 
-    const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
-    res.json({ text });
+    let text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
+    // Añadir el enlace real al final del post (genera preview en LinkedIn)
+    // Solo si hay URL real: del tema (source web) o del enlace propio del usuario
+    let articleUrl = '';
+    if (customSource && customSource.url) articleUrl = customSource.url;
+    else if (topic && topic.source === 'web' && topic.url) articleUrl = topic.url;
+    if (articleUrl && !text.includes(articleUrl)) {
+      text = text.trimEnd() + '\n\n' + articleUrl;
+    }
+    res.json({ text, articleUrl });
   } catch (err) {
     console.error('Generate error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Generation failed', detail: err.response?.data?.error?.message || err.message });
@@ -590,34 +608,34 @@ app.post('/api/search-topics', async (req, res) => {
   };
   const now = new Date().toISOString();
   const sourcesLine = sourcesList ? `Prioriza estas fuentes de confianza: ${sourcesList}.` : '';
-  const userPrompt = `Genera SOLO tendencias o noticias RECIENTES (de los últimos 5 días como máximo) sobre: ${sector}.
+  const userPrompt = `Busca las noticias más relevantes y recientes (últimos 7 días) sobre: ${sector}.
 Fecha y hora actual de referencia: ${now}.
 ${sourcesLine}
-REGLAS ESTRICTAS:
-- SOLO noticias publicadas en los últimos 5 días. Si una noticia es más antigua, NO la incluyas bajo ningún concepto.
-- Solo temas con engagement "hot" (muy caliente) o "trending" (en tendencia).
-- PRIORIZA noticias que afecten a España o Portugal (mercado ibérico). Si hay noticias relevantes de esos mercados, ponlas primero. Noticias globales solo como complemento.
-- Es mejor devolver pocos temas (o ninguno) que incluir noticias antiguas. NO rellenes.
-- Cada URL debe ser un enlace REAL y verificado a la noticia original.
-Devuelve SOLO un array JSON (sin backticks, sin texto extra). Si no hay noticias frescas que cumplan, devuelve un array vacío [].
-[{"title":"titular en español max 13 palabras","why":"por qué importa ahora (1 frase)","engagement":"hot|trending","platform":"x|linkedin|web|mixed","eng_reactions":"ej: 8.2k likes","eng_comments":"ej: 1.4k comentarios","tags":["tag1","tag2","tag3"],"angle":"ángulo de opinión para un directivo de Paramount (1 frase)","published":"fecha de la noticia, ej: 'Hoy 09:30' o '2026-06-02'","url":"enlace directo REAL a la noticia original"}]`;
+REGLAS:
+- Devuelve hasta 10 noticias, ORDENADAS por relevancia (la más relevante primero).
+- Solo noticias publicadas en los últimos 7 días.
+- PRIORIZA noticias que afecten a España o Portugal, pero INCLUYE también noticias globales que sean muy relevantes para el sector.
+- Marca cada noticia con su ámbito: "espana" si afecta principalmente a España/Portugal/mercado ibérico, o "global" si es internacional.
+- Cada URL debe ser un enlace REAL y verificado a la noticia original. No inventes URLs.
+- Prioriza noticias con impacto o conversación (deals, cifras, lanzamientos, movimientos estratégicos).
+Devuelve SOLO un array JSON (sin backticks, sin texto extra). Si de verdad no hay nada reciente, devuelve [].
+[{"title":"titular en español max 13 palabras","why":"por qué importa ahora (1 frase)","engagement":"hot|trending|normal","scope":"espana|global","platform":"x|linkedin|web|mixed","eng_reactions":"ej: 8.2k likes","eng_comments":"ej: 1.4k comentarios","tags":["tag1","tag2","tag3"],"angle":"ángulo de opinión para un directivo de Paramount (1 frase)","published":"fecha de la noticia, ej: 'Hoy 09:30' o '2026-06-02'","url":"enlace directo REAL a la noticia original"}]`;
 
-  // Búsqueda web (temas reales y frescos de los últimos 5 días)
+  // Búsqueda web (temas reales y frescos de los últimos 7 días)
   try {
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-sonnet-4-6',
-      max_tokens: 2500,
-      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
-      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas SOLO noticias REALES de los últimos 5 días, con su enlace original verificado. Si no hay nada fresco, devuelves un array vacío. Nunca inventas URLs ni rellenas con noticias antiguas. Respondes SOLO con JSON válido, sin backticks.',
-      messages: [{ role: 'user', content: `Busca en internet noticias de los últimos 5 días y luego ${userPrompt}` }]
-    }, { headers, timeout: 45000 });
+      max_tokens: 3500,
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
+      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas noticias REALES y recientes con su enlace original verificado. Devuelves hasta 10, ordenadas por relevancia, priorizando España/Portugal pero incluyendo globales relevantes. Nunca inventas URLs. Respondes SOLO con JSON válido, sin backticks.',
+      messages: [{ role: 'user', content: userPrompt }]
+    }, { headers, timeout: 55000 });
 
     const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
     const match = text.match(/\[[\s\S]*\]/);
     if (match) {
       let topics = JSON.parse(match[0]);
-      topics = topics.filter(t => t.engagement === 'hot' || t.engagement === 'trending');
-      topics = topics.map(t => ({ ...t, source: 'web' }));
+      topics = topics.map(t => ({ ...t, source: 'web', scope: t.scope === 'global' ? 'global' : 'espana' }));
       await persistSearch(sector, topics, now);
       return res.json({ topics, searchedAt: now, source: 'web' });
     }
