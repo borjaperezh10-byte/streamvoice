@@ -614,42 +614,40 @@ app.post('/api/search-topics', async (req, res) => {
   const userPrompt = `Busca las noticias más relevantes y recientes (últimos 7 días) sobre: ${sector}.
 Fecha y hora actual de referencia: ${now}.
 ${sourcesLine}
-REGLAS:
-- Devuelve hasta 10 noticias, ORDENADAS por relevancia (la más relevante primero).
-- Solo noticias publicadas en los últimos 7 días.
-- PRIORIZA noticias que afecten a España o Portugal, pero INCLUYE también noticias globales que sean muy relevantes para el sector.
-- Marca cada noticia con su ámbito: "espana" si afecta principalmente a España/Portugal/mercado ibérico, o "global" si es internacional.
-- Cada URL debe ser un enlace REAL y verificado a la noticia original. No inventes URLs.
-- Prioriza noticias con impacto o conversación (deals, cifras, lanzamientos, movimientos estratégicos).
-Devuelve SOLO un array JSON (sin backticks, sin texto extra). Si de verdad no hay nada reciente, devuelve [].
-[{"title":"titular en español max 13 palabras","why":"por qué importa ahora (1 frase)","engagement":"hot|trending|normal","scope":"espana|global","platform":"x|linkedin|web|mixed","eng_reactions":"ej: 8.2k likes","eng_comments":"ej: 1.4k comentarios","tags":["tag1","tag2","tag3"],"angle":"ángulo de opinión para un directivo de Paramount (1 frase)","published":"fecha de la noticia, ej: 'Hoy 09:30' o '2026-06-02'","url":"enlace directo REAL a la noticia original"}]`;
+INSTRUCCIONES:
+- Haz búsquedas eficientes (2-3 búsquedas bien dirigidas, no más). Sé rápido.
+- Devuelve hasta 8 noticias, ORDENADAS por relevancia (la más relevante primero).
+- Solo noticias de los últimos 7 días.
+- PRIORIZA España/Portugal, pero INCLUYE globales muy relevantes.
+- Marca ámbito: "espana" (mercado ibérico) o "global" (internacional).
+- URLs REALES y verificadas. No inventes.
+Devuelve SOLO un array JSON válido (sin backticks, sin texto antes ni después). Si no hay nada reciente, devuelve [].
+[{"title":"titular español max 13 palabras","why":"por qué importa (1 frase)","engagement":"hot|trending|normal","scope":"espana|global","tags":["t1","t2"],"angle":"ángulo de opinión (1 frase)","published":"fecha ej '2026-06-09'","url":"URL real"}]`;
 
   // Búsqueda web (temas reales y frescos de los últimos 7 días)
   try {
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-sonnet-4-6',
-      max_tokens: 3500,
-      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
-      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas noticias REALES y recientes con su enlace original verificado. Devuelves hasta 10, ordenadas por relevancia, priorizando España/Portugal pero incluyendo globales relevantes. Nunca inventas URLs. Respondes SOLO con JSON válido, sin backticks.',
+      max_tokens: 3000,
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4 }],
+      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas noticias REALES y recientes con enlaces verificados, de forma EFICIENTE Y RÁPIDA (pocas búsquedas bien dirigidas, máximo 3-4). Devuelves hasta 8, ordenadas por relevancia, priorizando España/Portugal pero incluyendo globales relevantes. Nunca inventas URLs. Es mejor devolver 4 noticias buenas que agotar el tiempo buscando 8. Respondes SOLO con un array JSON válido, sin texto adicional, sin backticks.',
       messages: [{ role: 'user', content: userPrompt }]
-    }, { headers, timeout: 55000 });
+    }, { headers, timeout: 57000 });
 
     const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
     const topics = extractTopics(text);
     if (topics && topics.length) {
-      const mapped = topics.map(t => ({ ...t, source: 'web', scope: t.scope === 'global' ? 'global' : 'espana' }));
+      const mapped = topics.slice(0, 10).map(t => ({ ...t, source: 'web', scope: t.scope === 'global' ? 'global' : 'espana' }));
       await persistSearch(sector, mapped, now);
       return res.json({ topics: mapped, searchedAt: now, source: 'web' });
     }
-    // La búsqueda respondió pero no pudimos extraer temas: devolver vacío real
+    // La búsqueda respondió pero no pudimos extraer temas
     console.error('No topics parsed. Raw text (first 500):', text.slice(0, 500));
-    await persistSearch(sector, [], now);
     return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: 'no_parse' });
   } catch (webErr) {
     const detail = webErr.response?.data?.error?.message || webErr.message;
     console.error('Web search failed:', detail);
     const isTimeout = webErr.code === 'ECONNABORTED' || /timeout/i.test(detail || '');
-    // Devolvemos el motivo para que el frontend pueda distinguir error técnico de vacío real
     return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: isTimeout ? 'timeout' : 'error', detail });
   }
 });
@@ -657,16 +655,17 @@ Devuelve SOLO un array JSON (sin backticks, sin texto extra). Si de verdad no ha
 // Extrae el array de temas de la respuesta, de forma robusta
 function extractTopics(text) {
   if (!text) return null;
-  // Quitar backticks de markdown si los hay
   let clean = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-  // Intento 1: parseo directo si todo es JSON
-  try { const p = JSON.parse(clean); if (Array.isArray(p)) return p; } catch(e) {}
-  // Intento 2: buscar el primer '[' y hacer parseo incremental hasta el ']' que cierra bien
-  const start = clean.indexOf('[');
-  if (start === -1) return null;
-  for (let end = clean.lastIndexOf(']'); end > start; end = clean.lastIndexOf(']', end - 1)) {
-    const candidate = clean.slice(start, end + 1);
-    try { const p = JSON.parse(candidate); if (Array.isArray(p)) return p; } catch(e) {}
+  // Solo aceptamos arrays de objetos-noticia (con 'title'), no arrays de números tipo [1]
+  const isValidTopicArray = (p) => Array.isArray(p) && (p.length === 0 || (typeof p[0] === 'object' && p[0] !== null && 'title' in p[0]));
+  // Intento 1: parseo directo
+  try { const p = JSON.parse(clean); if (isValidTopicArray(p)) return p; } catch(e) {}
+  // Intento 2: probar cada '[' como inicio y cada ']' como fin, quedarnos con un array de noticias no vacío
+  for (let start = clean.indexOf('['); start !== -1; start = clean.indexOf('[', start + 1)) {
+    for (let end = clean.lastIndexOf(']'); end > start; end = clean.lastIndexOf(']', end - 1)) {
+      const candidate = clean.slice(start, end + 1);
+      try { const p = JSON.parse(candidate); if (isValidTopicArray(p) && p.length > 0) return p; } catch(e) {}
+    }
   }
   return null;
 }
