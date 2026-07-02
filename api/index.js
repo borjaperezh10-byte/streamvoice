@@ -617,12 +617,13 @@ ${sourcesLine}
 INSTRUCCIONES:
 - Haz búsquedas eficientes (2-3 búsquedas bien dirigidas, no más). Sé rápido.
 - Devuelve hasta 8 noticias, ORDENADAS por relevancia (la más relevante primero).
-- Solo noticias de los últimos 7 días.
+- CRÍTICO: SOLO noticias publicadas en los ÚLTIMOS 7 DÍAS desde la fecha de referencia. Verifica la fecha real de publicación de cada noticia. Si una noticia tiene más de 7 días, NO la incluyas por muy relevante que sea. Una noticia vieja no sirve.
+- Para cada noticia, incluye su fecha real de publicación en el campo "published_date" en formato exacto AAAA-MM-DD. Si no puedes verificar la fecha, NO incluyas la noticia.
 - PRIORIZA España/Portugal, pero INCLUYE globales muy relevantes.
 - Marca ámbito: "espana" (mercado ibérico) o "global" (internacional).
 - URLs REALES y verificadas. No inventes.
 Devuelve SOLO un array JSON válido (sin backticks, sin texto antes ni después). Si no hay nada reciente, devuelve [].
-[{"title":"titular español max 13 palabras","why":"por qué importa (1 frase)","engagement":"hot|trending|normal","scope":"espana|global","tags":["t1","t2"],"angle":"ángulo de opinión (1 frase)","published":"fecha ej '2026-06-09'","url":"URL real"}]`;
+[{"title":"titular español max 13 palabras","why":"por qué importa (1 frase)","engagement":"hot|trending|normal","scope":"espana|global","tags":["t1","t2"],"angle":"ángulo de opinión (1 frase)","published":"texto legible ej 'Hace 2 días' o '9 jun'","published_date":"AAAA-MM-DD","url":"URL real"}]`;
 
   // Búsqueda web (temas reales y frescos de los últimos 7 días)
   try {
@@ -635,11 +636,24 @@ Devuelve SOLO un array JSON válido (sin backticks, sin texto antes ni después)
     }, { headers, timeout: 57000 });
 
     const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
-    const topics = extractTopics(text);
+    let topics = extractTopics(text);
     if (topics && topics.length) {
-      const mapped = topics.slice(0, 10).map(t => ({ ...t, source: 'web', scope: t.scope === 'global' ? 'global' : 'espana' }));
-      await persistSearch(sector, mapped, now);
-      return res.json({ topics: mapped, searchedAt: now, source: 'web' });
+      // FILTRO DE FRESCURA por código: descartar noticias de más de 7 días
+      const maxAgeMs = 7 * 24 * 60 * 60 * 1000;
+      const nowMs = Date.now();
+      const fresh = topics.filter(t => {
+        if (!t.published_date) return true; // si no hay fecha reconocible, no la descartamos aquí (el modelo ya la filtró)
+        const d = new Date(t.published_date);
+        if (isNaN(d.getTime())) return true; // fecha no parseable → no descartar por código
+        return (nowMs - d.getTime()) <= maxAgeMs;
+      });
+      const mapped = fresh.slice(0, 10).map(t => ({ ...t, source: 'web', scope: t.scope === 'global' ? 'global' : 'espana' }));
+      if (mapped.length) {
+        await persistSearch(sector, mapped, now);
+        return res.json({ topics: mapped, searchedAt: now, source: 'web' });
+      }
+      // Todo lo encontrado era viejo → sin novedades frescas
+      return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: 'all_old' });
     }
     // La búsqueda respondió pero no pudimos extraer temas
     console.error('No topics parsed. Raw text (first 500):', text.slice(0, 500));
