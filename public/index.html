@@ -98,7 +98,10 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .topic-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:5px}
 .topic-title{font-size:13.5px;font-weight:500;line-height:1.4;flex:1}
 .ep{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:600;white-space:nowrap}
-.ep.hot{background:var(--red-dim);color:var(--red)}.ep.trending{background:var(--green-dim);color:var(--green)}.ep.rising{background:var(--blue-dim);color:var(--blue)}
+.ep.hot{background:var(--red-dim);color:var(--red)}.ep.trending{background:var(--green-dim);color:var(--green)}.ep.rising{background:var(--blue-dim);color:var(--blue)}.ep.normal{background:var(--surface3);color:var(--muted)}
+.scope-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;letter-spacing:.3px}
+.scope-es{background:rgba(255,79,109,0.12);color:var(--red)}
+.scope-global{background:rgba(79,168,255,0.12);color:var(--blue)}
 .topic-why{font-size:11.5px;color:var(--muted);margin-bottom:5px;line-height:1.5}
 .topic-angle{font-size:11.5px;color:rgba(232,200,74,0.65);font-style:italic;margin-bottom:9px;line-height:1.5}
 .topic-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -609,7 +612,7 @@ function showLoading(t){document.getElementById('loadingText').textContent=t;doc
 function hideLoading(){document.getElementById('loadingOverlay').classList.remove('show');}
 async function fetchTopics(){
   const btn=document.getElementById('fetchBtn'),lbl=document.getElementById('fetchLabel');
-  btn.disabled=true;lbl.innerHTML='<span class="spinner"></span> Buscando...';showLoading('Buscando noticias reales de los últimos 5 días... (puede tardar hasta 45s)');
+  btn.disabled=true;lbl.innerHTML='<span class="spinner"></span> Buscando...';showLoading('Buscando noticias reales de los últimos 7 días... (puede tardar hasta 45s)');
   try{
     const r=await fetch('/api/search-topics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sector:currentSector})});
     const data=await r.json();
@@ -632,14 +635,15 @@ async function fetchTopics(){
 }
 function renderTopics(topics,searchedAt){
   const c=document.getElementById('topicsContainer');c.innerHTML='';
-  if(searchedAt){const meta=document.createElement('div');meta.style.cssText='font-size:11px;color:var(--muted);margin-bottom:4px;display:flex;align-items:center;gap:6px';meta.innerHTML='<span style="color:var(--green)">●</span> Última búsqueda: '+fmtDate(searchedAt)+' · '+topics.length+' temas (últimos 5 días)';c.appendChild(meta);}
-  if(!topics.length){c.innerHTML+='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text"><b>Sin novedades frescas</b><br><br>No hay noticias muy calientes o en tendencia de los últimos 5 días para esta categoría ahora mismo. Es mejor esperar a que surja algo de actualidad que publicar contenido desactualizado. Prueba otra temática.</div></div>';return;}
+  if(searchedAt){const meta=document.createElement('div');meta.style.cssText='font-size:11px;color:var(--muted);margin-bottom:4px;display:flex;align-items:center;gap:6px';meta.innerHTML='<span style="color:var(--green)">●</span> Última búsqueda: '+fmtDate(searchedAt)+' · '+topics.length+' noticias (últimos 7 días)';c.appendChild(meta);}
+  if(!topics.length){c.innerHTML+='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text"><b>Sin novedades</b><br><br>No se han encontrado noticias recientes para esta categoría ahora mismo. Prueba otra temática o vuelve a intentarlo en un rato.</div></div>';return;}
   const g=document.createElement('div');g.className='topics-grid';
-  const em={hot:'🔥 Muy caliente',trending:'📈 En tendencia'};
+  const em={hot:'🔥 Muy caliente',trending:'📈 En tendencia',normal:'📰 Relevante'};
   const pm={x:{c:'pb-x',l:'𝕏 Twitter'},linkedin:{c:'pb-li',l:'in LinkedIn'},web:{c:'pb-web',l:'🌐 Web'},mixed:{c:'pb-web',l:'🔀 Multi'}};
   topics.forEach((t,i)=>{
     const card=document.createElement('div');card.className='topic-card';card.dataset.title=t.title||'';
-    const ec=(t.engagement==='hot'||t.engagement==='trending')?t.engagement:'trending',p=pm[t.platform]||pm.web;
+    const ec=em[t.engagement]?t.engagement:'normal',p=pm[t.platform]||pm.web;
+    const scopeBadge=t.scope==='global'?'<span class="scope-badge scope-global">🌍 GLOBAL</span>':'<span class="scope-badge scope-es">🇪🇸 ESPAÑA</span>';
     const pub=t.published?'<span class="topic-meta-item">🕐 '+t.published+'</span>':'';
     let link='';
     if(t.source==='web' && t.url){
@@ -648,7 +652,7 @@ function renderTopics(topics,searchedAt){
       const q=encodeURIComponent(t.title||'');
       link='<a href="https://www.google.com/search?q='+q+'" target="_blank" rel="noopener" class="topic-link topic-link-search" onclick="event.stopPropagation()">🔍 Buscar en Google</a>';
     }
-    card.innerHTML='<div class="topic-stripe"></div><div class="topic-header"><div class="topic-title">'+t.title+'</div><div class="ep '+ec+'">'+em[ec]+'</div></div><div class="topic-why">'+t.why+'</div><div class="topic-angle">💡 '+t.angle+'</div>'+((pub||link)?'<div class="topic-meta-row">'+pub+link+'</div>':'')+'<div class="topic-footer"><div style="flex:1"><div class="tags">'+(t.tags||[]).map(x=>'<span class="tag">'+x+'</span>').join('')+'</div><div class="eng-stats"><div class="platform-badge '+p.c+'">'+p.l+'</div>'+(t.eng_reactions?'<div class="eng-stat">❤️ '+t.eng_reactions+'</div>':'')+(t.eng_comments?'<div class="eng-stat">💬 '+t.eng_comments+'</div>':'')+'</div></div><button class="gen-btn" onclick="generateDraft('+i+',event)" title="Coste estimado: ~$0.01 por post generado">Generar →</button></div>';
+    card.innerHTML='<div class="topic-stripe"></div><div class="topic-header"><div class="topic-title">'+t.title+'</div><div style="display:flex;gap:5px;flex-shrink:0">'+scopeBadge+'<div class="ep '+ec+'">'+em[ec]+'</div></div></div><div class="topic-why">'+t.why+'</div><div class="topic-angle">💡 '+t.angle+'</div>'+((pub||link)?'<div class="topic-meta-row">'+pub+link+'</div>':'')+'<div class="topic-footer"><div style="flex:1"><div class="tags">'+(t.tags||[]).map(x=>'<span class="tag">'+x+'</span>').join('')+'</div><div class="eng-stats"><div class="platform-badge '+p.c+'">'+p.l+'</div>'+(t.eng_reactions?'<div class="eng-stat">❤️ '+t.eng_reactions+'</div>':'')+(t.eng_comments?'<div class="eng-stat">💬 '+t.eng_comments+'</div>':'')+'</div></div><button class="gen-btn" onclick="generateDraft('+i+',event)" title="Coste estimado: ~$0.01 por post generado">Generar →</button></div>';
     card.onclick=e=>{if(e.target.tagName==='BUTTON'||e.target.tagName==='A')return;document.querySelectorAll('.topic-card').forEach(x=>x.classList.remove('selected'));card.classList.add('selected');};
     g.appendChild(card);
   });
