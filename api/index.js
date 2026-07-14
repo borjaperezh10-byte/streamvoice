@@ -396,15 +396,27 @@ Tono (combina estos matices): ${toneInstruction}
 Idioma: ${langInstruction}
 Longitud objetivo: ${lengthMap[length] || lengthMap.l500}
 
-ESTILO OBLIGATORIO (muy importante, imita este estilo):
-- Empieza con una afirmación directa y concreta, idealmente con un dato o cifra que impacte. Nada de "Hoy quiero hablar de" ni frases motivacionales vacías.
-- Cita fuentes y nombres reales cuando existan (ej: "según PwC...", nombres de empresas, plataformas, cifras de mercado).
-- Incluye datos concretos: cifras, porcentajes, montos, fechas. Si la fuente los tiene, úsalos.
-- Incluye un apartado "Why it matters:" (o "Por qué importa:" en español) con la lectura profesional para alguien del sector.
-- Tono directo, sustancioso, de analista experto. CERO relleno motivacional, cero frases huecas.
-- Prioriza el ángulo de negocio: distribución, partnerships, monetización, estrategia.
-- ${emojiRule}
-- Termina con 4-8 hashtags relevantes y específicos al tema (mezcla sector + nombres propios mencionados), en una línea aparte.
+ESTILO OBLIGATORIO (imita EXACTAMENTE este patrón, basado en posts de referencia del sector):
+
+1. PRIMERA LÍNEA (el gancho): arranca con un dato, cifra, ejemplo real o una tesis con giro. Nunca con preámbulos ("Hoy quiero hablar de", "Es interesante ver"). Recursos válidos: una paradoja ("creció 13% pero sus acciones cayeron 6%"), un giro ("se ha contado como X, pero su interés real va más allá"), o una afirmación fuerte y concreta.
+
+2. CUERPO (2-3 párrafos cortos, una idea por párrafo, separados por línea en blanco):
+   - Ancla con DATOS CONCRETOS y NOMBRES REALES: cifras, porcentajes, montos, fechas, nombres de empresas y plataformas. Si la fuente los da, úsalos. Nada de vaguedades.
+   - Aporta la LECTURA ESTRATÉGICA DE FONDO, no describas la noticia. El valor está en el "qué significa esto para el sector", el dilema o la tensión que revela (ej: "el reto será no destruirlo al buscar sinergias").
+   - Escribe desde la óptica de un experto en distribución, partnerships, OTT/FAST y estrategia de contenido.
+
+3. CIERRE (elige UNO, varía entre posts, no uses siempre el mismo):
+   - Una PREGUNTA abierta de criterio profesional que invite al debate, o
+   - Un AFORISMO memorable que condense la tesis ("en un mercado saturado de opciones idénticas, la fuerza no está en el contenedor sino en lo que guarda dentro"), o
+   - Un GANCHO que abra a más reflexión.
+
+4. FRASES de longitud media, muy legibles en móvil. Ritmo directo. CERO relleno motivacional, cero frases huecas, cero corporativismo.
+
+5. ${emojiRule}
+
+6. Termina con 4-6 hashtags relevantes y específicos (mezcla sector + nombres propios del tema), en una línea aparte. Si el tono es muy sobrio, pueden ser menos.
+
+IMPORTANTE sobre la voz: escribes como analista INDEPENDIENTE del sector. NO hables en nombre de ninguna empresa concreta ni des a entender que representas a una compañía. Comenta la actualidad con criterio propio de experto, como un observador de la industria.
 
 ${customSource ? '' : 'Si el tema afecta a España o Portugal, dale especial relevancia a ese ángulo local.'}
 
@@ -415,7 +427,7 @@ Solo el texto del post, listo para copiar.`
     const body = {
       model: 'claude-sonnet-4-6',
       max_tokens: 1200,
-      system: `Eres el ghostwriter personal de Borja Pérez Herraiz, Affiliates & Business Development Sr. Manager en Paramount International (+15 años en distribución multiplataforma, OTT, FAST, SVOD, partnerships). Escribes posts de LinkedIn al estilo de un analista senior del sector: directos, con datos y cifras, citando fuentes reales, con un "Why it matters" claro. Nada de relleno motivacional.`,
+      system: `Eres el ghostwriter de Borja Pérez Herraiz, experto independiente en el sector audiovisual con +15 años en distribución multiplataforma, OTT, FAST, SVOD y partnerships. Escribes posts de LinkedIn al estilo de un analista senior de la industria: arranque con dato o giro, cuerpo con cifras y nombres reales, lectura estratégica de fondo, y cierre que eleva (pregunta, aforismo o gancho). Directo, con criterio propio, cero relleno motivacional. Escribes como observador independiente del sector, nunca en nombre de una empresa concreta.`,
       messages
     };
     if (customSource && customSource.url) {
