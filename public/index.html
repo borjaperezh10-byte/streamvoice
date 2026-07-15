@@ -606,7 +606,15 @@ async function cancelScheduled(id){
   if(!confirm('¿Cancelar este post programado?'))return;
   try{await fetch('/api/scheduled/'+id,{method:'DELETE'});loadScheduled();}catch(e){}
 }
-function setSector(el,s){document.querySelectorAll('.sector-tag').forEach(x=>x.classList.remove('active'));el.classList.add('active');currentSector=s;}
+function setSector(el,s){
+  document.querySelectorAll('.sector-tag').forEach(x=>x.classList.remove('active'));
+  el.classList.add('active');
+  currentSector=s;
+  // Al cambiar de categoría, limpiar noticias y resetear el botón al estado inicial
+  allTopics=[];
+  document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">📡</div><div class="empty-text">Pulsa "Buscar tendencias" para descubrir lo que genera conversación ahora en esta categoría.</div></div>';
+  const lbl=document.getElementById('fetchLabel');if(lbl)lbl.innerHTML='🔍 Buscar tendencias';
+}
 function updateLength(v){currentLength=parseInt(v);document.getElementById('lengthLabel').textContent=LEN[v].l;}
 function filterTopics(q){q=q.toLowerCase();document.querySelectorAll('.topic-card').forEach(c=>{c.style.display=c.dataset.title.toLowerCase().includes(q)?'':'none';});}
 function showLoading(t){document.getElementById('loadingText').textContent=t;document.getElementById('loadingOverlay').classList.add('show');}
