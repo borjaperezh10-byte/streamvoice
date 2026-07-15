@@ -221,6 +221,8 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .sched-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .sched-when{font-size:13px;font-weight:500;color:var(--accent)}
 .sched-card-text{font-size:12.5px;color:var(--muted);line-height:1.5;white-space:pre-wrap}
+.pub-link-btn{font-size:11px;color:#fff;background:#0a66c2;padding:5px 12px;border-radius:16px;text-decoration:none;white-space:nowrap;transition:all .2s}
+.pub-link-btn:hover{background:#0958a8}
 .lang-row{display:flex;gap:6px}
 .lang-btn{flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:8px;font-size:12.5px;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s}
 .lang-btn:hover{color:var(--text)}
@@ -241,6 +243,22 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
     <input type="password" class="lock-input" id="lockInput" placeholder="Contraseña" onkeydown="if(event.key==='Enter')tryUnlock()">
     <button class="lock-btn" onclick="tryUnlock()">Entrar</button>
     <div class="lock-error" id="lockError"></div>
+  </div>
+</div>
+<div class="modal-overlay" id="editSchedModal">
+  <div class="modal-box" style="width:460px">
+    <div class="modal-title">✏️ Editar post programado</div>
+    <input type="hidden" id="editSchedId">
+    <div class="sched-label" style="margin-bottom:6px">Texto del post</div>
+    <textarea id="editSchedText" class="modal-input" rows="7" style="text-align:left;letter-spacing:0;resize:vertical;font-family:inherit"></textarea>
+    <div class="sched-label" style="margin:10px 0 6px">Fecha y hora</div>
+    <input type="datetime-local" id="editSchedDate" class="modal-input" style="text-align:left;letter-spacing:0">
+    <input type="password" id="editSchedPass" class="modal-input" placeholder="Contraseña de publicación" style="margin-top:10px">
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-cancel" onclick="closeEditSched()">Cancelar</button>
+      <button class="modal-btn modal-btn-confirm" onclick="saveEditSched()">Guardar cambios</button>
+    </div>
+    <div class="modal-error" id="editSchedError"></div>
   </div>
 </div>
 <div class="modal-overlay" id="publishModal">
@@ -272,7 +290,8 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
   <div class="header-center">
     <div class="nav-tab active" onclick="showTab('discover',this)">🔍 Descubrir</div>
     <div class="nav-tab" onclick="showTab('sources',this)">🔗 Fuentes</div>
-    <div class="nav-tab" onclick="showTab('metrics',this)">📊 Programados</div>
+    <div class="nav-tab" onclick="showTab('scheduled',this)">📅 Programados</div>
+    <div class="nav-tab" onclick="showTab('published',this)">📊 Publicados</div>
     <div class="nav-tab" onclick="showTab('tips',this)">💡 Mejora</div>
   </div>
   <div id="liStatus"><button class="li-connect-btn" onclick="connectLinkedIn()">🔗 Conectar LinkedIn</button></div>
@@ -298,7 +317,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="cost-amount" id="costAmount">$0.00</div>
         <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
       </div>
-      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v2.1 · 14 jul 2026</span></div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v2.2 · 14 jul 2026</span></div>
     </div>
   </div>
   <div class="tab-view active" id="tab-discover">
@@ -326,13 +345,16 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
     </div>
     <div id="sourcesContainer"><div class="empty-text" style="padding:2rem;text-align:center">Cargando fuentes...</div></div>
   </div>
-  <div class="tab-view" id="tab-metrics">
+  <div class="tab-view" id="tab-scheduled">
     <div class="sec-label" style="margin-bottom:.75rem">📅 Posts programados</div>
     <div id="scheduledContainer"><div class="banner">No tienes posts programados. Genera uno y elige "En 3h", "Mañana 9h" o una fecha al publicar.</div></div>
-    <div class="sec-label" style="margin:1.5rem 0 .75rem">📊 Métricas de posts publicados</div>
-    <div class="banner" id="metricsBanner"><b>Conecta LinkedIn</b> para ver las métricas reales de tus posts publicados.</div>
-    <div id="metricsContainer"></div>
   </div>
+  <div class="tab-view" id="tab-published">
+    <div class="sec-label" style="margin-bottom:.75rem">📊 Posts publicados</div>
+    <div class="banner" style="margin-bottom:1rem">Aquí tienes el historial de tus posts publicados desde StreamVoice. Para ver las métricas reales (impresiones, reacciones, comentarios), abre cada post en LinkedIn con el botón "Ver en LinkedIn" — LinkedIn no permite mostrar esas estadísticas fuera de su plataforma.</div>
+    <div id="publishedContainer"><div class="banner">Cargando...</div></div>
+  </div>
+  <div class="tab-view" id="tab-metrics" style="display:none"></div>
   <div class="tab-view" id="tab-tips">
     <div class="banner"><b>Tips personalizados</b> basados en tu perfil y el rendimiento de tus posts.</div>
     <div id="tipsContainer"></div>
@@ -592,19 +614,58 @@ function renderCost(){
   document.getElementById('costAmount').textContent='$'+cost.toFixed(2);
   document.getElementById('costDetail').textContent=m.searches+' búsquedas · '+m.posts+' posts';
 }
-function showTab(t,el){document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-view').forEach(x=>x.classList.remove('active'));el.classList.add('active');document.getElementById('tab-'+t).classList.add('active');if(t==='metrics'){loadMetrics();loadScheduled();}if(t==='tips')loadTips();if(t==='sources')loadSources();}
+function showTab(t,el){document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-view').forEach(x=>x.classList.remove('active'));el.classList.add('active');document.getElementById('tab-'+t).classList.add('active');if(t==='scheduled')loadScheduled();if(t==='published')loadPublished();if(t==='tips')loadTips();if(t==='sources')loadSources();}
+let scheduledPosts=[];
 async function loadScheduled(){
   try{
-    const r=await fetch('/api/scheduled');const posts=await r.json();
+    const r=await fetch('/api/scheduled?status=pending');scheduledPosts=await r.json();
     const c=document.getElementById('scheduledContainer');
-    const pending=posts.filter(p=>p.status==='pending');
-    if(!pending.length){c.innerHTML='<div class="banner">No tienes posts programados pendientes. Genera uno y elige "En 3h", "Mañana 9h" o una fecha al publicar.</div>';return;}
-    c.innerHTML=pending.map(p=>'<div class="sched-card"><div class="sched-card-head"><span class="sched-when">🕐 '+fmtDate(p.scheduled_at)+'</span><button class="src-del" onclick="cancelScheduled('+p.id+')" title="Cancelar">🗑️</button></div><div class="sched-card-text">'+(p.text||'').slice(0,180).replace(/</g,'&lt;')+'...</div></div>').join('');
+    if(!scheduledPosts.length){c.innerHTML='<div class="banner">No tienes posts programados pendientes. Genera uno y elige "En 3h", "Mañana 9h" o una fecha al publicar.</div>';return;}
+    c.innerHTML=scheduledPosts.map((p,i)=>'<div class="sched-card"><div class="sched-card-head"><span class="sched-when">🕐 '+fmtDate(p.scheduled_at)+'</span><div style="display:flex;gap:4px"><button class="src-del" onclick="editScheduled('+i+')" title="Editar">✏️</button><button class="src-del" onclick="cancelScheduled('+p.id+')" title="Eliminar">🗑️</button></div></div><div class="sched-card-text">'+(p.text||'').replace(/</g,'&lt;')+'</div></div>').join('');
   }catch(e){}
 }
 async function cancelScheduled(id){
-  if(!confirm('¿Cancelar este post programado?'))return;
+  if(!confirm('¿Eliminar este post programado?'))return;
   try{await fetch('/api/scheduled/'+id,{method:'DELETE'});loadScheduled();}catch(e){}
+}
+function editScheduled(i){
+  const p=scheduledPosts[i];if(!p)return;
+  const dt=new Date(p.scheduled_at);
+  const localDt=new Date(dt.getTime()-dt.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  document.getElementById('editSchedId').value=p.id;
+  document.getElementById('editSchedText').value=p.text||'';
+  document.getElementById('editSchedDate').value=localDt;
+  document.getElementById('editSchedPass').value='';
+  document.getElementById('editSchedError').textContent='';
+  document.getElementById('editSchedModal').classList.add('show');
+}
+function closeEditSched(){document.getElementById('editSchedModal').classList.remove('show');}
+async function saveEditSched(){
+  const id=document.getElementById('editSchedId').value;
+  const text=document.getElementById('editSchedText').value.trim();
+  const dateVal=document.getElementById('editSchedDate').value;
+  const pass=document.getElementById('editSchedPass').value;
+  const err=document.getElementById('editSchedError');
+  if(!text){err.textContent='El texto no puede estar vacío';return;}
+  if(!dateVal){err.textContent='Elige fecha y hora';return;}
+  try{
+    const r=await fetch('/api/scheduled/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,scheduledAt:new Date(dateVal).toISOString(),publishPassword:pass})});
+    const d=await r.json();
+    if(d.ok){closeEditSched();loadScheduled();}
+    else if(d.error==='wrong_publish_password'){err.textContent='Contraseña de publicación incorrecta';}
+    else{err.textContent=d.error||'No se pudo guardar';}
+  }catch(e){err.textContent='Error al guardar';}
+}
+async function loadPublished(){
+  try{
+    const r=await fetch('/api/scheduled?status=published');const posts=await r.json();
+    const c=document.getElementById('publishedContainer');
+    if(!posts.length){c.innerHTML='<div class="banner">Aún no has publicado ningún post desde StreamVoice. Cuando publiques, aparecerán aquí con acceso directo a LinkedIn.</div>';return;}
+    c.innerHTML=posts.map(p=>{
+      const url=p.linkedin_id?'https://www.linkedin.com/feed/update/'+p.linkedin_id:'https://www.linkedin.com/in/borjaph/recent-activity/all/';
+      return '<div class="sched-card"><div class="sched-card-head"><span class="sched-when" style="color:var(--green)">✓ Publicado '+fmtDate(p.published_at||p.scheduled_at)+'</span><a href="'+url+'" target="_blank" rel="noopener" class="pub-link-btn">Ver en LinkedIn ↗</a></div><div class="sched-card-text">'+(p.text||'').replace(/</g,'&lt;')+'</div></div>';
+    }).join('');
+  }catch(e){document.getElementById('publishedContainer').innerHTML='<div class="banner">Error al cargar el historial.</div>';}
 }
 function setSector(el,s){
   document.querySelectorAll('.sector-tag').forEach(x=>x.classList.remove('active'));
