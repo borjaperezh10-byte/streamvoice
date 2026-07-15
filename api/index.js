@@ -148,6 +148,16 @@ app.post('/api/publish', requireAuth, async (req, res) => {
   // Publish now
   try {
     const result = await publishToLinkedIn(text, req.linkedinSession);
+    // Guardar en el historial de publicados
+    try {
+      await sbUpsert('scheduled_posts', {
+        text,
+        scheduled_at: new Date().toISOString(),
+        status: 'published',
+        published_at: new Date().toISOString(),
+        linkedin_id: result.linkedinId
+      });
+    } catch(e) { console.error('No se pudo guardar en historial:', e.message); }
     res.json({ ok: true, status: 'published', linkedinId: result.linkedinId });
   } catch (err) {
     console.error('Publish error:', err.response?.data || err.message);
@@ -208,12 +218,33 @@ app.post('/api/schedule', requireAuth, async (req, res) => {
   }
 });
 
-// Listar posts programados
+// Listar posts programados (pendientes por defecto, o por status)
 app.get('/api/scheduled', async (req, res) => {
   try {
-    const rows = await sbGet('scheduled_posts', '?select=*&order=scheduled_at.asc');
+    const status = req.query.status || 'pending';
+    const order = status === 'published' ? 'published_at.desc' : 'scheduled_at.asc';
+    const rows = await sbGet('scheduled_posts', `?status=eq.${status}&select=*&order=${order}`);
     res.json(rows || []);
   } catch(e) { res.json([]); }
+});
+
+// Editar un post programado (texto y/o fecha)
+app.patch('/api/scheduled/:id', requireAuth, async (req, res) => {
+  const { text, scheduledAt, publishPassword } = req.body;
+  if (process.env.PUBLISH_PASSWORD && publishPassword !== process.env.PUBLISH_PASSWORD) {
+    return res.status(403).json({ error: 'wrong_publish_password', detail: 'Contraseña de publicación incorrecta.' });
+  }
+  const patch = {};
+  if (text) patch.text = text;
+  if (scheduledAt) {
+    if (new Date(scheduledAt) <= new Date()) return res.status(400).json({ error: 'La fecha debe ser futura' });
+    patch.scheduled_at = scheduledAt;
+  }
+  if (!Object.keys(patch).length) return res.status(400).json({ error: 'Nada que actualizar' });
+  try {
+    await axios.patch(`${SB_URL}/rest/v1/scheduled_posts?id=eq.${req.params.id}`, patch, { headers: sbHeaders });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: 'No se pudo editar', detail: e.message }); }
 });
 
 // Cancelar/borrar un post programado
