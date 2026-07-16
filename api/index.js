@@ -356,11 +356,11 @@ app.post('/api/generate', async (req, res) => {
   const { topic, profile, tones, length } = req.body;
 
   const lengthMap = {
-    l100: 'unos 100 caracteres, ultra breve, como un titular potente con gancho',
-    l300: 'unos 300 caracteres, muy conciso y directo',
-    l500: 'unos 500 caracteres, breve pero con desarrollo',
-    l700: 'unos 700 caracteres, con buen desarrollo del argumento',
-    l1000: 'unos 1000 caracteres, completo y detallado'
+    l100: 'MÁXIMO 100 caracteres. Ultra breve: una o dos frases potentes, como un titular con gancho. NO te extiendas.',
+    l300: 'MÁXIMO 300 caracteres (unas 3-4 frases). Muy conciso y directo. NO te extiendas más.',
+    l500: 'MÁXIMO 500 caracteres. Breve pero con algo de desarrollo. NO te extiendas más.',
+    l700: 'aproximadamente 700 caracteres (ni mucho más ni mucho menos).',
+    l1000: 'aproximadamente 1000 caracteres. Desarrollo completo pero sin pasarte de 1100.'
   };
 
   // 38 tonos con su descripción y si llevan emojis
@@ -451,14 +451,21 @@ IMPORTANTE sobre la voz: escribes como analista INDEPENDIENTE del sector. NO hab
 
 ${customSource ? '' : 'Si el tema afecta a España o Portugal, dale especial relevancia a ese ángulo local.'}
 
+⚠️ LONGITUD (regla prioritaria, respétala por encima de todo): ${lengthMap[length] || lengthMap.l500} Cuenta los caracteres del post (sin contar hashtags) y ajústate a ese límite. Si te pasas, recorta hasta cumplirlo. Los hashtags van aparte y no cuentan para el límite.
+
 Solo el texto del post, listo para copiar.`
     }];
 
-    // Si hay URL propia, usar búsqueda web para que lea el contenido real
+    // max_tokens proporcional a la longitud pedida (evita que se alargue de más)
+    const tokensByLength = { l100: 150, l300: 300, l500: 450, l700: 600, l1000: 900 };
+    const maxTok = tokensByLength[length] || 600;
+    // Si hay URL, necesita más tokens porque además lee/procesa la web
+    const finalMaxTok = (customSource && customSource.url) ? maxTok + 400 : maxTok;
+
     const body = {
       model: 'claude-sonnet-4-6',
-      max_tokens: 1200,
-      system: `Eres el ghostwriter de Borja Pérez Herraiz, experto independiente en el sector audiovisual con +15 años en distribución multiplataforma, OTT, FAST, SVOD y partnerships. Escribes posts de LinkedIn al estilo de un analista senior de la industria: arranque con dato o giro, cuerpo con cifras y nombres reales, lectura estratégica de fondo, y cierre que eleva (pregunta, aforismo o gancho). Directo, con criterio propio, cero relleno motivacional. Escribes como observador independiente del sector, nunca en nombre de una empresa concreta.`,
+      max_tokens: finalMaxTok,
+      system: `Eres el ghostwriter de Borja Pérez Herraiz, experto independiente en el sector audiovisual con +15 años en distribución multiplataforma, OTT, FAST, SVOD y partnerships. Escribes posts de LinkedIn al estilo de un analista senior de la industria: arranque con dato o giro, cuerpo con cifras y nombres reales, lectura estratégica de fondo, y cierre que eleva (pregunta, aforismo o gancho). Directo, con criterio propio, cero relleno motivacional. Escribes como observador independiente del sector, nunca en nombre de una empresa concreta. RESPETA SIEMPRE el límite de longitud que se te indica.`,
       messages
     };
     if (customSource && customSource.url) {
