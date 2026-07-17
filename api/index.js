@@ -683,6 +683,7 @@ ${strategyBlock}
 
 INSTRUCCIONES:
 - Devuelve hasta 8 noticias, ORDENADAS por relevancia (la más relevante primero).
+- ANTI-DUPLICADOS: si la misma noticia aparece en varios medios, INCLÚYELA UNA SOLA VEZ. Elige la versión más completa y reciente (la que tenga más detalle, datos o cobertura). No repitas la misma historia con distintas fuentes.
 - CRÍTICO: SOLO noticias publicadas en los ÚLTIMOS 7 DÍAS desde la fecha de referencia. Verifica la fecha real de publicación de cada noticia. Si una noticia tiene más de 7 días, NO la incluyas por muy relevante que sea.
 - Para cada noticia, incluye su fecha real de publicación en "published_date" en formato exacto AAAA-MM-DD. Si no puedes verificar la fecha, NO incluyas la noticia.
 - PRIORIZA España/Portugal, pero INCLUYE globales muy relevantes.
@@ -715,7 +716,22 @@ REGLA DE FORMATO CRÍTICA: NO expliques tu razonamiento ni escribas análisis en
         if (isNaN(d.getTime())) return true; // fecha no parseable → no descartar por código
         return (nowMs - d.getTime()) <= maxAgeMs;
       });
-      const mapped = fresh.slice(0, 10).map(t => ({ ...t, source: 'web', scope: t.scope === 'global' ? 'global' : 'espana' }));
+      // ANTI-DUPLICADOS por código (red de seguridad): descartar títulos muy parecidos
+      const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+      const seen = [];
+      const deduped = fresh.filter(t => {
+        const words = norm(t.title).split(' ').filter(w => w.length > 3);
+        if (!words.length) return true;
+        // Índice de Jaccard (intersección/unión) para medir similitud entre títulos
+        for (const prev of seen) {
+          const inter = words.filter(w => prev.includes(w)).length;
+          const union = new Set([...words, ...prev]).size;
+          if (union && inter / union >= 0.3) return false; // misma noticia → descartar
+        }
+        seen.push(words);
+        return true;
+      });
+      const mapped = deduped.slice(0, 10).map(t => ({ ...t, source: 'web', scope: t.scope === 'global' ? 'global' : 'espana' }));
       if (mapped.length) {
         await persistSearch(sector, mapped, now);
         return res.json({ topics: mapped, searchedAt: now, source: 'web' });
