@@ -647,10 +647,16 @@ app.post('/api/search-topics', async (req, res) => {
 
   // Cargar fuentes activas desde Supabase
   let sourcesList = '';
+  let sourceDomains = [];
   try {
     const srcs = await sbGet('sources', '?active=eq.true&select=name,url');
     if (srcs && srcs.length) {
       sourcesList = srcs.map(s => s.name + (s.url ? ' ('+s.url+')' : '')).join(', ');
+      // Extraer dominios limpios para búsquedas site:
+      sourceDomains = srcs
+        .filter(s => s.url)
+        .map(s => s.url.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '').trim())
+        .filter(Boolean);
     }
   } catch(e) { console.error('Sources load error:', e.message); }
 
@@ -660,15 +666,25 @@ app.post('/api/search-topics', async (req, res) => {
     'Content-Type': 'application/json'
   };
   const now = new Date().toISOString();
-  const sourcesLine = sourcesList ? `Prioriza estas fuentes de confianza: ${sourcesList}.` : '';
+  const siteQueries = sourceDomains.length
+    ? sourceDomains.slice(0, 8).map(d => 'site:' + d).join(' OR ')
+    : '';
+  const sourcesLine = sourcesList ? `Fuentes prioritarias del usuario: ${sourcesList}.` : '';
+  const strategyBlock = siteQueries
+    ? `ESTRATEGIA DE BÚSQUEDA (en dos fases):
+FASE 1 (prioritaria): Busca PRIMERO dentro de las fuentes del usuario usando el operador site:. Por ejemplo: "${sector} (${siteQueries})" y variantes con nombres concretos (Netflix, Disney, etc.). Empieza siempre por estas fuentes de confianza.
+FASE 2 (complemento): Si te queda margen, complementa con una búsqueda web general sobre "${sector}" para captar noticias de otras fuentes.`
+    : `Busca en la web noticias recientes sobre "${sector}".`;
   const userPrompt = `Busca las noticias más relevantes y recientes (últimos 7 días) sobre: ${sector}.
 Fecha y hora actual de referencia: ${now}.
 ${sourcesLine}
+
+${strategyBlock}
+
 INSTRUCCIONES:
-- Haz búsquedas eficientes (2-3 búsquedas bien dirigidas, no más). Sé rápido.
 - Devuelve hasta 8 noticias, ORDENADAS por relevancia (la más relevante primero).
-- CRÍTICO: SOLO noticias publicadas en los ÚLTIMOS 7 DÍAS desde la fecha de referencia. Verifica la fecha real de publicación de cada noticia. Si una noticia tiene más de 7 días, NO la incluyas por muy relevante que sea. Una noticia vieja no sirve.
-- Para cada noticia, incluye su fecha real de publicación en el campo "published_date" en formato exacto AAAA-MM-DD. Si no puedes verificar la fecha, NO incluyas la noticia.
+- CRÍTICO: SOLO noticias publicadas en los ÚLTIMOS 7 DÍAS desde la fecha de referencia. Verifica la fecha real de publicación de cada noticia. Si una noticia tiene más de 7 días, NO la incluyas por muy relevante que sea.
+- Para cada noticia, incluye su fecha real de publicación en "published_date" en formato exacto AAAA-MM-DD. Si no puedes verificar la fecha, NO incluyas la noticia.
 - PRIORIZA España/Portugal, pero INCLUYE globales muy relevantes.
 - Marca ámbito: "espana" (mercado ibérico) o "global" (internacional).
 - URLs REALES y verificadas. No inventes.
@@ -680,8 +696,8 @@ Devuelve SOLO un array JSON válido (sin backticks, sin texto antes ni después)
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-sonnet-4-6',
       max_tokens: 3000,
-      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4 }],
-      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas noticias REALES y recientes con enlaces verificados, de forma EFICIENTE Y RÁPIDA (pocas búsquedas bien dirigidas, máximo 3-4). Devuelves hasta 8, ordenadas por relevancia, priorizando España/Portugal pero incluyendo globales relevantes. Nunca inventas URLs. Es mejor devolver 4 noticias buenas que agotar el tiempo buscando 8. Respondes SOLO con un array JSON válido, sin texto adicional, sin backticks.',
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
+      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas noticias REALES y recientes con enlaces verificados. Empiezas SIEMPRE buscando dentro de las fuentes prioritarias del usuario (con site:) y luego complementas con búsqueda general. Devuelves hasta 8, ordenadas por relevancia, priorizando España/Portugal pero incluyendo globales relevantes. Nunca inventas URLs. Respondes SOLO con un array JSON válido, sin texto adicional, sin backticks.',
       messages: [{ role: 'user', content: userPrompt }]
     }, { headers, timeout: 57000 });
 
