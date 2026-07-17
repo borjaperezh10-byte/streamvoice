@@ -689,15 +689,17 @@ INSTRUCCIONES:
 - Marca ámbito: "espana" (mercado ibérico) o "global" (internacional).
 - URLs REALES y verificadas. No inventes.
 Devuelve SOLO un array JSON válido (sin backticks, sin texto antes ni después). Si no hay nada reciente, devuelve [].
-[{"title":"titular español max 13 palabras","why":"por qué importa (1 frase)","engagement":"hot|trending|normal","scope":"espana|global","tags":["t1","t2"],"angle":"ángulo de opinión (1 frase)","published":"texto legible ej 'Hace 2 días' o '9 jun'","published_date":"AAAA-MM-DD","url":"URL real"}]`;
+[{"title":"titular español max 13 palabras","why":"por qué importa (1 frase)","engagement":"hot|trending|normal","scope":"espana|global","tags":["t1","t2"],"angle":"ángulo de opinión (1 frase)","published":"texto legible ej 'Hace 2 días' o '9 jun'","published_date":"AAAA-MM-DD","url":"URL real"}]
+
+REGLA DE FORMATO CRÍTICA: NO expliques tu razonamiento ni escribas análisis en texto. NO escribas frases como "Analizando los resultados" ni listas con guiones. Tu respuesta debe EMPEZAR directamente con el carácter [ y TERMINAR con ]. Solo el array JSON, nada más. Si razonas internamente, hazlo en silencio y entrega únicamente el JSON final.`;
 
   // Búsqueda web (temas reales y frescos de los últimos 7 días)
   try {
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-sonnet-4-6',
-      max_tokens: 3000,
+      max_tokens: 4000,
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
-      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas noticias REALES y recientes con enlaces verificados. Empiezas SIEMPRE buscando dentro de las fuentes prioritarias del usuario (con site:) y luego complementas con búsqueda general. Devuelves hasta 8, ordenadas por relevancia, priorizando España/Portugal pero incluyendo globales relevantes. Nunca inventas URLs. Respondes SOLO con un array JSON válido, sin texto adicional, sin backticks.',
+      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas noticias REALES y recientes con enlaces verificados. Empiezas SIEMPRE buscando dentro de las fuentes prioritarias del usuario (con site:) y luego complementas con búsqueda general. Devuelves hasta 8, ordenadas por relevancia, priorizando España/Portugal pero incluyendo globales relevantes. Nunca inventas URLs. FORMATO OBLIGATORIO: tu respuesta final debe ser ÚNICAMENTE un array JSON válido, empezando por [ y terminando por ]. NUNCA escribas tu razonamiento, análisis ni comentarios en la respuesta; todo ese trabajo hazlo internamente y entrega solo el JSON.',
       messages: [{ role: 'user', content: userPrompt }]
     }, { headers, timeout: 57000 });
 
