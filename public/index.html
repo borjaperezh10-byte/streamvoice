@@ -317,7 +317,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="cost-amount" id="costAmount">$0.00</div>
         <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
       </div>
-      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v2.5 · 17 jul 2026</span></div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v2.7 · 17 jul 2026</span></div>
     </div>
   </div>
   <div class="tab-view active" id="tab-discover">
@@ -687,7 +687,7 @@ async function fetchTopics(){
     const r=await fetch('/api/search-topics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sector:currentSector})});
     const data=await r.json();
     if(data.error==='rate_limited'){
-      document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text"><b>Límite de 24h activo</b><br><br>'+data.detail+'<br><br><span style="font-size:11px;color:var(--muted2)">Última búsqueda: '+fmtDate(data.lastSearch)+'</span></div></div>';
+      document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text"><b>Ya has buscado hoy en esta categoría</b><br><br>'+data.detail+'<br><br><span style="font-size:11px;color:var(--muted2)">Última búsqueda: '+fmtDate(data.lastSearch)+'</span></div></div>';
     }else if(data.empty && data.reason==='all_old'){
       document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text"><b>Sin novedades de esta semana</b><br><br>Se encontraron noticias, pero todas tenían más de 7 días. Para LinkedIn no interesa contenido antiguo. Prueba otra temática o vuelve más tarde.</div></div>';
     }else if(data.empty && (data.reason==='timeout'||data.reason==='error')){
