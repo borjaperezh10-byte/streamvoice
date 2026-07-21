@@ -627,17 +627,23 @@ app.delete('/api/sources/:id', async (req, res) => {
 app.post('/api/search-topics', async (req, res) => {
   const { sector } = req.body;
 
-  // ── Límite de 24h por sector (usando Supabase) ──
+  // ── Límite: una búsqueda por sector y día natural (se resetea a las 00:00 hora española) ──
   try {
     const rows = await sbGet('rate_limit', `?sector=eq.${encodeURIComponent(sector)}&select=*`);
     if (rows && rows[0]) {
-      const last = new Date(rows[0].last_search).getTime();
-      const hoursPassed = (Date.now() - last) / (1000 * 60 * 60);
-      if (hoursPassed < 24) {
-        const hoursLeft = Math.ceil(24 - hoursPassed);
+      // Fecha (año-mes-día) en hora española de la última búsqueda y de ahora
+      const spainDay = (date) => new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit'
+      }).format(date); // formato YYYY-MM-DD
+      const lastDay = spainDay(new Date(rows[0].last_search));
+      const todayDay = spainDay(new Date());
+      if (lastDay === todayDay) {
+        // Ya buscó hoy en esta categoría → bloqueado hasta medianoche
+        const nowMadrid = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Madrid' }));
+        const hoursLeft = Math.max(1, Math.ceil((24 - nowMadrid.getHours()) - nowMadrid.getMinutes() / 60));
         return res.status(429).json({
           error: 'rate_limited',
-          detail: `Ya buscaste en esta categoría hace poco. Podrás volver a buscar en ~${hoursLeft}h.`,
+          detail: `Ya buscaste en esta categoría hoy. Podrás volver a buscar mañana a partir de las 00:00.`,
           lastSearch: rows[0].last_search,
           hoursLeft
         });
