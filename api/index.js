@@ -592,6 +592,48 @@ app.get('/api/search-history', async (req, res) => {
   }
 });
 
+// ─── HISTORIAL DE BORRADORES ──────────────────────────────────────────────────
+
+// Guarda un borrador generado (se llama automáticamente tras cada generación exitosa)
+app.post('/api/draft-history', async (req, res) => {
+  const { draftText, charCount, tones, topic, source } = req.body;
+  if (!draftText) return res.status(400).json({ error: 'Falta el texto del borrador' });
+  try {
+    const row = await sbUpsert('draft_history', {
+      draft_text: draftText,
+      char_count: charCount || draftText.length,
+      tones: tones || [],
+      topic: topic || null,
+      source: source || 'topic'
+    });
+    res.json(row[0] || { ok: true });
+  } catch (e) {
+    console.error('draft-history save error:', e.response?.data || e.message);
+    res.status(500).json({ error: 'No se pudo guardar el borrador' });
+  }
+});
+
+// Lista los últimos 50 borradores generados (más reciente primero)
+app.get('/api/draft-history', async (req, res) => {
+  try {
+    const rows = await sbGet('draft_history', '?select=*&order=created_at.desc&limit=50');
+    res.json(rows || []);
+  } catch (e) {
+    console.error('draft-history list error:', e.response?.data || e.message);
+    res.json([]);
+  }
+});
+
+// Borra una entrada del historial de borradores
+app.delete('/api/draft-history/:id', async (req, res) => {
+  try {
+    await sbDelete('draft_history', `?id=eq.${req.params.id}`);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'No se pudo borrar' });
+  }
+});
+
 // ─── FUENTES (gestión) ────────────────────────────────────────────────────────
 app.get('/api/sources', async (req, res) => {
   try {
@@ -704,8 +746,8 @@ REGLA DE FORMATO CRÍTICA: NO expliques tu razonamiento ni escribas análisis en
   try {
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-sonnet-4-6',
-      max_tokens: 4000,
-      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
+      max_tokens: 2500,
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4 }],
       system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas noticias REALES y recientes con enlaces verificados. Empiezas SIEMPRE buscando dentro de las fuentes prioritarias del usuario (con site:) y luego complementas con búsqueda general. Devuelves hasta 8, ordenadas por relevancia, priorizando España/Portugal pero incluyendo globales relevantes. Nunca inventas URLs. FORMATO OBLIGATORIO: tu respuesta final debe ser ÚNICAMENTE un array JSON válido, empezando por [ y terminando por ]. NUNCA escribas tu razonamiento, análisis ni comentarios en la respuesta; todo ese trabajo hazlo internamente y entrega solo el JSON.',
       messages: [{ role: 'user', content: userPrompt }]
     }, { headers, timeout: 57000 });
