@@ -140,7 +140,9 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .li-preview-name{font-size:14px;font-weight:600;color:#000;line-height:1.2}
 .li-preview-sub{font-size:12px;color:#666;line-height:1.3}
 .li-preview-sub2{font-size:11px;color:#888;display:flex;align-items:center;gap:3px}
-.li-preview-body{font-size:14px;line-height:1.5;color:#1d1d1d;white-space:pre-wrap;word-break:break-word}
+.li-preview-body{font-size:14px;line-height:1.5;color:#1d1d1d;white-space:pre-wrap;word-break:break-word;outline:none;cursor:text;border-radius:4px;padding:2px 4px;margin:0 -4px;transition:background .15s}
+.li-preview-body:focus{background:rgba(10,102,194,0.06)}
+.li-preview-edit-hint{font-size:10.5px;color:var(--muted);margin:-8px 0 12px;display:flex;align-items:center;gap:4px}
 .li-preview-actions{display:flex;justify-content:space-around;border-top:1px solid #e0e0e0;margin-top:14px;padding-top:8px}
 .li-preview-action{font-size:12px;color:#666;display:flex;align-items:center;gap:5px;padding:6px}
 .length-row{display:flex;align-items:center;gap:10px}
@@ -151,6 +153,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .draft-text{font-size:12.5px;line-height:1.75;white-space:pre-wrap;word-break:break-word}
 .draft-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:160px;gap:8px;text-align:center}
 .draft-placeholder-icon{font-size:26px;opacity:.2}.draft-placeholder-text{font-size:12px;color:var(--muted);max-width:200px;line-height:1.5}
+.draft-edit-textarea{width:100%;height:100%;min-height:168px;background:transparent;border:none;outline:none;resize:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:12.5px;line-height:1.75;white-space:pre-wrap}
 .char-row{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted)}
 .action-row{display:flex;gap:7px}
 .pub-btn{flex:1;background:#0a66c2;border:none;border-radius:7px;padding:10px;color:#fff;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-family:'DM Sans',sans-serif;font-weight:500}
@@ -176,6 +179,10 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .tip-title{font-size:13px;font-weight:500;flex:1}
 .tip-body{font-size:12px;color:var(--muted);line-height:1.6}
 .tip-priority{padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
+.draft-hist-meta{font-size:11px;color:var(--muted);margin-bottom:8px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+.draft-hist-text{font-size:12px;color:var(--text);line-height:1.6;white-space:pre-wrap;word-break:break-word;background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:8px;max-height:160px;overflow-y:auto}
+.draft-hist-actions{display:flex;gap:6px;justify-content:flex-end}
+.draft-hist-actions .icon-btn{padding:6px 10px;font-size:12px}
 .tp-high{background:var(--red-dim);color:var(--red)}.tp-medium{background:var(--orange-dim);color:var(--orange)}.tp-low{background:var(--blue-dim);color:var(--blue)}
 .topic-meta-row{display:flex;align-items:center;gap:12px;margin-bottom:9px;flex-wrap:wrap}
 .topic-meta-item{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px}
@@ -292,6 +299,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
     <div class="nav-tab" onclick="showTab('sources',this)">🔗 Fuentes</div>
     <div class="nav-tab" onclick="showTab('scheduled',this)">📅 Programados</div>
     <div class="nav-tab" onclick="showTab('published',this)">📊 Publicados</div>
+    <div class="nav-tab" onclick="showTab('drafts',this)">📝 Borradores</div>
     <div class="nav-tab" onclick="showTab('tips',this)">💡 Mejora</div>
   </div>
   <div id="liStatus"><button class="li-connect-btn" onclick="connectLinkedIn()">🔗 Conectar LinkedIn</button></div>
@@ -317,7 +325,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="cost-amount" id="costAmount">$0.00</div>
         <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
       </div>
-      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v2.7 · 17 jul 2026</span></div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v2.8 · 17 jul 2026</span></div>
     </div>
   </div>
   <div class="tab-view active" id="tab-discover">
@@ -355,6 +363,11 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
     <div id="publishedContainer"><div class="banner">Cargando...</div></div>
   </div>
   <div class="tab-view" id="tab-metrics" style="display:none"></div>
+  <div class="tab-view" id="tab-drafts">
+    <div class="sec-label" style="margin-bottom:.75rem">📝 Historial de borradores</div>
+    <div class="banner" style="margin-bottom:1rem">Cada borrador que generas se guarda automáticamente aquí, con el tono, los caracteres y la noticia/fuente de la que salió.</div>
+    <div id="draftHistoryContainer"><div class="banner">Cargando...</div></div>
+  </div>
   <div class="tab-view" id="tab-tips">
     <div class="banner"><b>Tips personalizados</b> basados en tu perfil y el rendimiento de tus posts.</div>
     <div id="tipsContainer"></div>
@@ -528,7 +541,12 @@ function openPublishModal(mode){
   // Pintar vista previa estilo LinkedIn
   const safe=currentDraftRaw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   document.getElementById('liPreview').innerHTML=
-    '<div class="li-preview-card"><div class="li-preview-head"><div class="li-preview-avatar">BP</div><div><div class="li-preview-name">Borja Pérez Herraiz</div><div class="li-preview-sub">Affiliates & Business Development Sr. Manager · Paramount</div><div class="li-preview-sub2">Ahora · 🌐</div></div></div><div class="li-preview-body">'+safe+'</div><div class="li-preview-actions"><span class="li-preview-action">👍 Recomendar</span><span class="li-preview-action">💬 Comentar</span><span class="li-preview-action">🔁 Compartir</span><span class="li-preview-action">📤 Enviar</span></div></div>';
+    '<div class="li-preview-card"><div class="li-preview-head"><div class="li-preview-avatar">BP</div><div><div class="li-preview-name">Borja Pérez Herraiz</div><div class="li-preview-sub">Affiliates & Business Development Sr. Manager · Paramount</div><div class="li-preview-sub2">Ahora · 🌐</div></div></div><div class="li-preview-body" id="liPreviewBody" contenteditable="true" spellcheck="false">'+safe+'</div><div class="li-preview-actions"><span class="li-preview-action">👍 Recomendar</span><span class="li-preview-action">💬 Comentar</span><span class="li-preview-action">🔁 Compartir</span><span class="li-preview-action">📤 Enviar</span></div></div>'+
+    '<div class="li-preview-edit-hint">✏️ Puedes editar el texto directamente aquí antes de publicar</div>';
+  const previewBody=document.getElementById('liPreviewBody');
+  previewBody.addEventListener('input',()=>{
+    currentDraftRaw=previewBody.innerText.replace(/\n{3,}/g,'\n\n');
+  });
   document.getElementById('publishModal').classList.add('show');
   // Preseleccionar según el botón pulsado
   if(mode==='schedule'){
@@ -544,7 +562,16 @@ function openPublishModal(mode){
   }
   setTimeout(()=>document.getElementById('publishPassInput').focus(),100);
 }
-function closePublishModal(){document.getElementById('publishModal').classList.remove('show');}
+function closePublishModal(){
+  document.getElementById('publishModal').classList.remove('show');
+  // Si se editó el texto en la vista previa, refleja el cambio también en el borrador principal
+  const ta=document.getElementById('draftEditArea');
+  if(ta && ta.value!==currentDraftRaw){
+    ta.value=currentDraftRaw;
+    document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
+    const st=document.getElementById('charStatus');st.textContent='✓ Editado';st.style.color='var(--blue)';
+  }
+}
 let scheduleWhen='now';
 function setSchedule(when,btn){
   scheduleWhen=when;
@@ -614,7 +641,7 @@ function renderCost(){
   document.getElementById('costAmount').textContent='$'+cost.toFixed(2);
   document.getElementById('costDetail').textContent=m.searches+' búsquedas · '+m.posts+' posts';
 }
-function showTab(t,el){document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-view').forEach(x=>x.classList.remove('active'));el.classList.add('active');document.getElementById('tab-'+t).classList.add('active');if(t==='scheduled')loadScheduled();if(t==='published')loadPublished();if(t==='tips')loadTips();if(t==='sources')loadSources();}
+function showTab(t,el){document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-view').forEach(x=>x.classList.remove('active'));el.classList.add('active');document.getElementById('tab-'+t).classList.add('active');if(t==='scheduled')loadScheduled();if(t==='published')loadPublished();if(t==='tips')loadTips();if(t==='sources')loadSources();if(t==='drafts')loadDraftHistory();}
 let scheduledPosts=[];
 async function loadScheduled(){
   try{
@@ -761,10 +788,10 @@ async function generateDraft(idx,e){
   try{
     const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,profile:document.getElementById('profileInput').value,tones:selectedTones,length:LEN[currentLength].k,lang:currentLang})});
     const d=await r.json();currentDraftRaw=d.text||'Error.';
-    da.innerHTML='<div class="draft-text">'+currentDraftRaw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+    renderDraftArea(currentDraftRaw);
     document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
     const st=document.getElementById('charStatus');st.textContent='✓ Listo';st.style.color='var(--green)';
-    if(d.text)addUsage('post');
+    if(d.text){addUsage('post');saveDraftToHistory(currentDraftRaw,topic,'topic');}
   }catch(e){da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon">⚠️</div><div class="draft-placeholder-text">Error al generar.</div></div>';}
   hideLoading();generating=false;
 }
@@ -782,16 +809,69 @@ async function generateFromCustom(){
     const d=await r.json();currentDraftRaw=d.text||'Error.';
     if(d.error){da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon">⚠️</div><div class="draft-placeholder-text">Error: '+(d.detail||d.error)+'</div></div>';}
     else{
-      da.innerHTML='<div class="draft-text">'+currentDraftRaw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+      renderDraftArea(currentDraftRaw);
       document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
       const st=document.getElementById('charStatus');st.textContent='✓ Listo';st.style.color='var(--green)';
       document.getElementById('pubBtn').disabled=!isConnected;document.getElementById('schedBtn').disabled=!isConnected;
       addUsage('post');
+      const customTopic={title:url?('Enlace: '+url):(text.slice(0,70)+(text.length>70?'…':'')),url:url||null};
+      saveDraftToHistory(currentDraftRaw,customTopic,'custom');
     }
   }catch(e){da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon">⚠️</div><div class="draft-placeholder-text">Error al generar.</div></div>';}
   hideLoading();generating=false;
 }
+function renderDraftArea(text){
+  const da=document.getElementById('draftArea');
+  da.innerHTML='<textarea class="draft-edit-textarea" id="draftEditArea" spellcheck="false"></textarea>';
+  const ta=document.getElementById('draftEditArea');
+  ta.value=text;
+  ta.addEventListener('input',()=>{
+    currentDraftRaw=ta.value;
+    document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
+    const st=document.getElementById('charStatus');st.textContent='✓ Editado';st.style.color='var(--blue)';
+  });
+}
 function copyDraft(){if(currentDraftRaw)navigator.clipboard.writeText(currentDraftRaw);}
+// ── Historial de borradores (se guarda automáticamente al generar) ──
+async function saveDraftToHistory(text,topic,source){
+  if(!text)return;
+  try{
+    await fetch('/api/draft-history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      draftText:text,charCount:text.length,tones:selectedTones,topic:topic||null,source:source||'topic'
+    })});
+  }catch(e){}
+}
+async function loadDraftHistory(){
+  const c=document.getElementById('draftHistoryContainer');
+  c.innerHTML='<div class="banner">Cargando...</div>';
+  try{
+    const r=await fetch('/api/draft-history');
+    const rows=await r.json();
+    if(!rows.length){c.innerHTML='<div class="empty-state"><div class="empty-icon">📝</div><div class="empty-text">Aún no has generado ningún borrador.</div></div>';return;}
+    const esc=s=>(s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    c.innerHTML=rows.map(d=>{
+      const tones=(d.tones||[]).map(t=>TONE_LABELS[t]||t).join(', ')||'—';
+      const topic=d.topic||{};
+      const newsLabel=esc(topic.title||'Fuente propia');
+      const newsUrl=topic.url?' · <a href="'+topic.url+'" target="_blank" class="src-visit">🔗 Ver fuente</a>':'';
+      return '<div class="tip-card draft-hist-card">'
+        +'<div class="tip-header"><span style="font-size:16px">📝</span><span class="tip-title">'+newsLabel+'</span><span class="tip-priority" style="background:var(--blue-dim);color:var(--blue)">'+fmtDate(d.created_at)+'</span></div>'
+        +'<div class="draft-hist-meta"><span>🎭 '+esc(tones)+'</span><span>🔢 '+(d.char_count||0)+' caracteres</span>'+newsUrl+'</div>'
+        +'<div class="draft-hist-text">'+esc(d.draft_text)+'</div>'
+        +'<div class="draft-hist-actions"><button class="icon-btn" onclick="copyDraftHistText(\''+d.id+'\')" title="Copiar">📋 Copiar</button><button class="icon-btn" onclick="deleteDraftHistory(\''+d.id+'\')" title="Borrar">🗑️ Borrar</button></div>'
+        +'</div>';
+    }).join('');
+    window._draftHistCache=rows;
+  }catch(e){c.innerHTML='<div class="empty-state"><div class="empty-text">No se pudo cargar el historial.</div></div>';}
+}
+function copyDraftHistText(id){
+  const row=(window._draftHistCache||[]).find(d=>d.id===id);
+  if(row)navigator.clipboard.writeText(row.draft_text||'');
+}
+async function deleteDraftHistory(id){
+  if(!confirm('¿Borrar este borrador del historial?'))return;
+  try{await fetch('/api/draft-history/'+id,{method:'DELETE'});loadDraftHistory();}catch(e){}
+}
 async function loadMetrics(){
   if(!isConnected){document.getElementById('metricsContainer').innerHTML='';return;}
   document.getElementById('metricsBanner').innerHTML='<b>Métricas de tus posts</b> publicados desde StreamVoice.';
