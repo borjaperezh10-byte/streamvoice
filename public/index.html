@@ -183,6 +183,42 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .draft-hist-text{font-size:12px;color:var(--text);line-height:1.6;white-space:pre-wrap;word-break:break-word;background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:8px;max-height:160px;overflow-y:auto}
 .draft-hist-actions{display:flex;gap:6px;justify-content:flex-end}
 .draft-hist-actions .icon-btn{padding:6px 10px;font-size:12px}
+.guide-updated{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 13px;margin-bottom:14px}
+.guide-updated b{color:var(--text)}
+.guide-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px}
+.guide-card h4{font-size:13.5px;font-weight:600;margin:0 0 6px;display:flex;align-items:center;gap:7px}
+.guide-card p{font-size:12px;color:var(--muted);line-height:1.65;margin:0 0 6px}
+.guide-card .src{font-size:11px}
+.guide-card .src a{color:var(--blue);text-decoration:none}
+.guide-card .src a:hover{text-decoration:underline}
+.guide-tag{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;margin-bottom:8px}
+.guide-tag.do{background:var(--green-dim);color:var(--green)}
+.guide-tag.dont{background:var(--red-dim,rgba(220,80,80,.15));color:#e06666}
+.slot-table{width:100%;border-collapse:collapse;font-size:11px;margin:6px 0 4px}
+.slot-table th,.slot-table td{border:1px solid var(--border);padding:5px 4px;text-align:center}
+.slot-table th{color:var(--muted);font-weight:600;font-size:10.5px}
+.slot-table td.hour{color:var(--muted);font-weight:600;white-space:nowrap;background:var(--surface2)}
+.slot-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--muted);margin-top:6px}
+.slot-legend span{display:flex;align-items:center;gap:4px}
+.slot-dot{width:10px;height:10px;border-radius:2px;display:inline-block}
+.pub-extra{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:10px}
+.pub-extra-row{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text);cursor:pointer;user-select:none}
+.pub-extra-row input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--accent)}
+.pub-hint{font-size:10.5px;color:var(--muted);line-height:1.5;margin-top:6px}
+.img-specs{font-size:11px;color:var(--muted);line-height:1.6;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px 10px;margin:6px 0 8px}
+.img-specs b{color:var(--text)}
+.img-drop{border:1.5px dashed var(--border2);border-radius:8px;padding:16px;text-align:center;font-size:12px;color:var(--muted);cursor:pointer;transition:all .2s}
+.img-drop:hover,.img-drop.dragover{border-color:var(--accent);color:var(--text);background:var(--accent-dim)}
+.angle-warn{background:var(--orange-dim);border:1px solid rgba(255,159,74,0.3);border-radius:9px;padding:11px 13px;margin-bottom:12px}
+.angle-warn-title{font-size:12.5px;font-weight:600;color:var(--orange);display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.angle-warn-body{font-size:11.5px;color:var(--text);line-height:1.55;margin-bottom:8px}
+.angle-warn-list{font-size:11px;color:var(--muted);line-height:1.6;margin:0 0 10px;padding-left:16px}
+.angle-warn-actions{display:flex;gap:8px}
+.angle-warn-btn{flex:1;padding:8px 10px;border-radius:7px;font-size:11.5px;font-weight:500;cursor:pointer;border:1px solid var(--border2);font-family:'DM Sans',sans-serif}
+.angle-warn-btn.proceed{background:var(--surface3);color:var(--text)}
+.angle-warn-btn.edit{background:var(--accent);color:#000;border-color:var(--accent)}
+.slot-warn{background:var(--orange-dim);border:1px solid rgba(255,159,74,0.3);border-radius:9px;padding:10px 12px;margin-bottom:10px;font-size:11.5px;color:var(--text);line-height:1.55}
+.slot-warn b{color:var(--orange)}
 .tp-high{background:var(--red-dim);color:var(--red)}.tp-medium{background:var(--orange-dim);color:var(--orange)}.tp-low{background:var(--blue-dim);color:var(--blue)}
 .topic-meta-row{display:flex;align-items:center;gap:12px;margin-bottom:9px;flex-wrap:wrap}
 .topic-meta-item{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px}
@@ -273,6 +309,33 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
     <div class="modal-title">👁️ Vista previa · Publicar o programar</div>
     <div class="modal-sub">Así se verá tu post en LinkedIn. Publícalo ahora o prográmalo para más tarde.</div>
     <div id="liPreview" style="margin-bottom:14px"></div>
+
+    <div id="angleWarning" style="display:none"></div>
+
+    <div class="pub-extra">
+      <label class="pub-extra-row"><input type="checkbox" id="includeLinkChk" onchange="toggleLinkField(this.checked)"> <span>🔗 Incluir enlace del artículo en el post</span></label>
+      <div id="linkFieldWrap" style="display:none">
+        <input type="text" id="publishLinkInput" class="modal-input" style="text-align:left;letter-spacing:0;margin-top:6px" placeholder="https://enlace-del-articulo.com">
+        <div class="pub-hint">⚠️ Un enlace en el cuerpo reduce el alcance ~18,8% (ver guía). Si lo incluyes, valóralo.</div>
+      </div>
+    </div>
+
+    <div class="pub-extra">
+      <label class="pub-extra-row"><input type="checkbox" id="includeImageChk" onchange="toggleImageField(this.checked)"> <span>🖼️ Acompañar con una imagen</span></label>
+      <div id="imageFieldWrap" style="display:none">
+        <div class="img-specs" id="imageSpecs"></div>
+        <input type="file" id="publishImageInput" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="onImagePicked(event)">
+        <div class="img-drop" id="imageDrop" onclick="document.getElementById('publishImageInput').click()">
+          <span id="imageDropText">📎 Haz clic para subir una imagen (o arrástrala aquí)</span>
+        </div>
+        <div id="imagePreviewWrap" style="display:none;margin-top:8px">
+          <img id="imagePreview" style="max-width:100%;border-radius:8px;border:1px solid var(--border)">
+          <button class="icon-btn" style="margin-top:6px;padding:6px 10px;font-size:12px" onclick="clearImage()">🗑️ Quitar imagen</button>
+        </div>
+        <div class="pub-hint" id="imageNote">ℹ️ Por ahora la imagen es solo para tu previsualización. La publicación automática de la imagen en LinkedIn llegará en una próxima versión; de momento súbela manualmente al publicar.</div>
+      </div>
+    </div>
+
     <div class="sched-options">
       <div class="sched-label">¿Cuándo publicar?</div>
       <div class="sched-quick">
@@ -369,7 +432,15 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
     <div id="draftHistoryContainer"><div class="banner">Cargando...</div></div>
   </div>
   <div class="tab-view" id="tab-tips">
-    <div class="banner"><b>Tips personalizados</b> basados en tu perfil y el rendimiento de tus posts.</div>
+    <div class="sec-label" style="margin-bottom:.75rem">📈 Guía de buenas prácticas en LinkedIn (2026)</div>
+    <div class="guide-updated">
+      <span>🗓️ <b>Última actualización:</b> 18 de agosto de 2026</span>
+      <span style="opacity:.6">·</span>
+      <span>🔄 Las tendencias y el algoritmo de LinkedIn cambian: conviene <b>revisar esta guía cada 3-4 meses</b> (próxima revisión recomendada: ~diciembre 2026).</span>
+    </div>
+    <div id="guideContainer"></div>
+    <div class="sec-label" style="margin:1.5rem 0 .75rem">💡 Tips personalizados</div>
+    <div class="banner" style="margin-bottom:1rem">Basados en tu perfil y el rendimiento de tus posts.</div>
     <div id="tipsContainer"></div>
   </div>
   <div class="right-panel">
@@ -390,7 +461,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         </div>
       </div>
       <div><div class="sec-label" style="margin-bottom:.6rem">Longitud</div>
-        <div class="length-row"><input type="range" class="length-slider" id="lengthSlider" min="1" max="5" step="1" value="3" oninput="updateLength(this.value)"><span class="length-val" id="lengthLabel">500 caracteres</span></div>
+        <div class="length-row"><input type="range" class="length-slider" id="lengthSlider" min="1" max="6" step="1" value="3" oninput="updateLength(this.value)"><span class="length-val" id="lengthLabel">1000 caracteres</span></div>
       </div>
       <div><div class="sec-label" style="margin-bottom:.6rem">O genera desde tu propio enlace</div>
         <input type="text" id="customUrl" class="src-input" placeholder="Pega una URL de noticia...">
@@ -419,7 +490,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 <div class="loading-overlay" id="loadingOverlay"><div class="loading-spinner"></div><div class="loading-text" id="loadingText">Cargando...</div></div>
 <script>
 let currentSector='streaming SVOD Netflix Disney HBO 2026';
-let selectedTones=['opinionado'],currentLength=3,allTopics=[],currentDraftRaw='',lastTopicIdx=null,isConnected=false,generating=false,currentLang='es';
+let selectedTones=['opinionado'],currentLength=3,allTopics=[],currentDraftRaw='',lastTopicIdx=null,isConnected=false,generating=false,currentLang='es',includeLink=false,attachedImage=null;
 function setLang(l,btn){currentLang=l;document.querySelectorAll('.lang-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
 let historyData2=[];
 // ── Gestión de fuentes ──
@@ -469,7 +540,7 @@ async function deleteSource(id){
   if(!confirm('¿Eliminar esta fuente?'))return;
   try{await fetch('/api/sources/'+id,{method:'DELETE'});loadSources();}catch(e){}
 }
-const LEN={1:{l:'100 caracteres',k:'l100'},2:{l:'300 caracteres',k:'l300'},3:{l:'500 caracteres',k:'l500'},4:{l:'700 caracteres',k:'l700'},5:{l:'1000 caracteres',k:'l1000'}};
+const LEN={1:{l:'500 caracteres',k:'l500'},2:{l:'800 caracteres',k:'l800'},3:{l:'1000 caracteres',k:'l1000'},4:{l:'1200 caracteres',k:'l1200'},5:{l:'1400 caracteres',k:'l1400'},6:{l:'1600 caracteres',k:'l1600'}};
 const TONES=[
   ['alegre','😀','Alegre'],['neutro','😐','Neutro'],['triste','😔','Triste'],['formal','📜','Formal'],
   ['informal','😄','Informal'],['motivacional','💪','Motivacional'],['humoristico','😂','Humorístico'],['serio','😐','Serio'],
@@ -532,12 +603,136 @@ async function tryUnlock(){
     }
   }catch(e){err.textContent='Error de conexión';}
 }
+// ── Punto 6: enlace e imagen opcionales ──
+function toggleLinkField(on){
+  includeLink=on;
+  document.getElementById('linkFieldWrap').style.display=on?'block':'none';
+}
+function toggleImageField(on){
+  document.getElementById('imageFieldWrap').style.display=on?'block':'none';
+  if(on)renderImageSpecs();
+  if(!on)clearImage();
+}
+function renderImageSpecs(){
+  document.getElementById('imageSpecs').innerHTML=
+    '<b>📐 Especificaciones recomendadas para la imagen:</b><br>'
+    +'• Formato cuadrado <b>1:1 (1080×1080 px)</b> o vertical <b>4:5 (1080×1350 px)</b> — ocupan más pantalla en móvil.<br>'
+    +'• También vale horizontal 1.91:1 (1200×627 px) si es tipo banner.<br>'
+    +'• Peso máximo 5 MB. Formatos: PNG, JPG o WEBP.<br>'
+    +'• Texto legible y poco recargado; alto contraste. Sin logos de terceros.<br>'
+    +'• <b>Prompt sugerido para IA:</b> ilustración editorial limpia sobre <i>[tema del post]</i>, estilo profesional, paleta sobria, sin texto superpuesto.';
+}
+function onImagePicked(e){
+  const file=e.target.files&&e.target.files[0];
+  if(!file)return;
+  if(file.size>5*1024*1024){alert('La imagen supera los 5 MB. Usa una más ligera.');return;}
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    attachedImage={dataUrl:ev.target.result,name:file.name};
+    document.getElementById('imagePreview').src=ev.target.result;
+    document.getElementById('imagePreviewWrap').style.display='block';
+    document.getElementById('imageDropText').textContent='✅ '+file.name+' — clic para cambiarla';
+  };
+  reader.readAsDataURL(file);
+}
+function clearImage(){
+  attachedImage=null;
+  const inp=document.getElementById('publishImageInput');if(inp)inp.value='';
+  const wrap=document.getElementById('imagePreviewWrap');if(wrap)wrap.style.display='none';
+  const t=document.getElementById('imageDropText');if(t)t.textContent='📎 Haz clic para subir una imagen (o arrástrala aquí)';
+}
+
+// ── Punto 2: chequeo de "ángulo" por reglas simples (útil > resumen) ──
+function checkAngle(text){
+  const issues=[];
+  const t=(text||'').trim();
+  const lower=t.toLowerCase();
+  const bodyNoTags=t.replace(/#[\wáéíóúñ]+/gi,'').trim();
+  // 1. Muy corto = probablemente poco desarrollo / bajo esfuerzo
+  if(bodyNoTags.length<400)issues.push('El post es bastante corto ('+bodyNoTags.length+' caract.). Los posts de menos de ~500 suelen rendir peor. Considera desarrollar más la idea.');
+  // 2. Arranques de "resumen" en vez de opinión/gancho
+  const weakOpeners=['hoy quiero','os quiero','quiero hablar','en este post','hoy os','os cuento','me gustaría hablar','hoy hablamos','esta semana os'];
+  const firstLine=lower.split('\n')[0];
+  if(weakOpeners.some(w=>firstLine.includes(w)))issues.push('El gancho parece un preámbulo ("'+firstLine.slice(0,40)+'…"). Arranca con un dato, una cifra o una tesis con giro, no con "hoy quiero hablar de".');
+  // 3. Señales de "resumen de noticia" sin opinión
+  const opinionMarkers=['creo','opino','a mi juicio','la lectura','lo relevante','lo interesante no es','esto significa','el error','la clave','el verdadero','en el fondo','mi apuesta','me parece','lo que nadie','el dilema','la pregunta de fondo','esto implica','lo que está en juego'];
+  const hasOpinion=opinionMarkers.some(m=>lower.includes(m));
+  if(!hasOpinion)issues.push('No se detectan marcas de opinión o lectura estratégica. Recuerda: aporta tu punto de vista y el "qué significa esto", no solo lo que ha pasado.');
+  // 4. Cierre de "engagement bait"
+  if(/escribe\s+1|comenta\s+1|pon\s+un\s+\d|dale\s+like\s+si|type\s+1/i.test(lower))issues.push('El cierre parece "cebo de engagement" (pedir likes/números). El algoritmo lo penaliza; mejor una pregunta de criterio o una afirmación con opinión.');
+  return issues;
+}
+
+// ── Punto 4/5: aviso de franja horaria ──
+function dayIndexToSlotDay(jsDay){ // JS: 0=domingo..6=sábado → nuestro 0=lunes..4=viernes, o -1 si finde
+  if(jsDay===0||jsDay===6)return -1;
+  return jsDay-1;
+}
+function hourToSlotIndex(h,m){
+  const t=h+m/60;
+  if(t>=7.5&&t<8.5)return 0;
+  if(t>=8.5&&t<9.5)return 1;
+  if(t>=9.5&&t<11)return 2;
+  if(t>=11&&t<12)return 3;
+  if(t>=12&&t<13)return 4;
+  if(t>=13&&t<14)return 5;
+  if(t>=14&&t<16)return 6;
+  if(t>=16&&t<17)return 7;
+  if(t>=17&&t<18)return 8;
+  if(t>=18&&t<19)return 9;
+  return -1;
+}
+function slotScoreFor(date){
+  const d=dayIndexToSlotDay(date.getDay());
+  const hi=hourToSlotIndex(date.getHours(),date.getMinutes());
+  if(d<0)return {score:0,reason:'finde'};
+  if(hi<0)return {score:0,reason:'fuera'};
+  return {score:SLOT_GRID[hi][d],day:d,hour:hi};
+}
+// Devuelve hasta 2 mejores franjas próximas a partir de una fecha
+function nextBetterSlots(fromDate,minScore){
+  const out=[];
+  let cur=new Date(fromDate.getTime());
+  for(let step=0;step<7*48&&out.length<2;step++){ // 7 días × 48 medias horas
+    cur=new Date(cur.getTime()+30*60000); // avanza en saltos de 30 min
+    const d=dayIndexToSlotDay(cur.getDay());
+    const hi=hourToSlotIndex(cur.getHours(),cur.getMinutes());
+    if(d<0||hi<0)continue;
+    const sc=SLOT_GRID[hi][d];
+    if(sc>=minScore){
+      const label=SLOT_DAYS[d]+' '+SLOT_HOURS[hi].split('–')[0];
+      if(!out.some(o=>o.label===label))out.push({label,score:sc});
+    }
+  }
+  return out;
+}
+function buildSlotWarning(date){
+  const {score,reason}=slotScoreFor(date);
+  if(reason==='finde'){
+    const better=nextBetterSlots(date,65);
+    return {weak:true,html:'<div class="slot-warn">📅 Vas a publicar en <b>fin de semana</b>, cuando LinkedIn tiene muy poca actividad profesional.'+(better.length?' Franjas mucho mejores próximas: <b>'+better.map(b=>b.label+' ('+b.score+'%)').join('</b> · <b>')+'</b>.':'')+'</div>'};
+  }
+  if(score>=65)return {weak:false};
+  const better=nextBetterSlots(date,65);
+  return {weak:true,html:'<div class="slot-warn">⏰ Esta franja tiene <b>poco impacto (~'+(score||'baja')+'%)</b> para tu audiencia en España. '+(better.length?'Franjas próximas con más sentido: <b>'+better.map(b=>b.label+' ('+b.score+'%)').join('</b> · <b>')+'</b>.':'Las mejores suelen ser martes-jueves de 9:30 a 12:00.')+'</div>'};
+}
+
 // ── Modal de publicación con contraseña ──
 function openPublishModal(mode){
   if(!currentDraftRaw){alert('Genera un post primero.');return;}
   if(!isConnected){alert('Conecta LinkedIn primero.');return;}
   document.getElementById('publishModalError').textContent='';
   document.getElementById('publishPassInput').value='';
+  // Resetear controles opcionales (enlace / imagen / avisos)
+  includeLink=false;attachedImage=null;angleAcknowledged=false;slotAcknowledged=false;
+  document.getElementById('includeLinkChk').checked=false;
+  document.getElementById('linkFieldWrap').style.display='none';
+  document.getElementById('publishLinkInput').value='';
+  document.getElementById('includeImageChk').checked=false;
+  document.getElementById('imageFieldWrap').style.display='none';
+  document.getElementById('angleWarning').style.display='none';
+  document.getElementById('angleWarning').innerHTML='';
+  clearImage();
   // Pintar vista previa estilo LinkedIn
   const safe=currentDraftRaw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   document.getElementById('liPreview').innerHTML=
@@ -590,19 +785,89 @@ function computeScheduleDate(){
   if(scheduleWhen==='custom'){const v=document.getElementById('schedDatetime').value;return v?new Date(v).toISOString():null;}
   return null;
 }
+// bandera para no repetir los avisos si el usuario ya decidió "seguir adelante"
+let angleAcknowledged=false, slotAcknowledged=false;
 async function confirmPublish(){
   const pass=document.getElementById('publishPassInput').value;
   const err=document.getElementById('publishModalError');
   err.textContent='';
   const schedDate=computeScheduleDate();
   if(scheduleWhen==='custom' && !schedDate){err.textContent='Elige una fecha y hora';return;}
+
+  // ── PUNTO 2: chequeo de ángulo (útil > resumen) ──
+  if(!angleAcknowledged){
+    const issues=checkAngle(currentDraftRaw);
+    if(issues.length){
+      const w=document.getElementById('angleWarning');
+      w.innerHTML='<div class="angle-warn">'
+        +'<div class="angle-warn-title">🧭 Revisa el ángulo antes de publicar</div>'
+        +'<div class="angle-warn-body">Este post podría no seguir del todo el enfoque recomendado (útil y con opinión, no un resumen). Detectado:</div>'
+        +'<ul class="angle-warn-list">'+issues.map(i=>'<li>'+i+'</li>').join('')+'</ul>'
+        +'<div class="angle-warn-actions">'
+        +'<button class="angle-warn-btn edit" onclick="dismissAngleAndEdit()">✏️ Volver a editar</button>'
+        +'<button class="angle-warn-btn proceed" onclick="proceedDespiteAngle()">Seguir adelante igualmente</button>'
+        +'</div></div>';
+      w.style.display='block';
+      w.scrollIntoView({behavior:'smooth',block:'center'});
+      return;
+    }
+  }
+
+  // ── PUNTO 4/5: aviso de franja horaria de poco impacto ──
+  if(!slotAcknowledged){
+    const targetDate = schedDate ? new Date(schedDate) : new Date();
+    const warn=buildSlotWarning(targetDate);
+    if(warn.weak){
+      const w=document.getElementById('angleWarning');
+      w.innerHTML=warn.html.replace('slot-warn','slot-warn')
+        +'<div class="angle-warn-actions" style="margin-top:8px">'
+        +'<button class="angle-warn-btn edit" onclick="closeAngleWarning()">🕐 Cambiar la hora</button>'
+        +'<button class="angle-warn-btn proceed" onclick="proceedDespiteSlot()">Publicar igualmente</button>'
+        +'</div>';
+      w.style.display='block';
+      w.scrollIntoView({behavior:'smooth',block:'center'});
+      return;
+    }
+  }
+
+  await doPublishOrSchedule(pass,schedDate,err);
+}
+function dismissAngleAndEdit(){
+  // Cierra el aviso y lleva el foco al texto editable de la preview
+  document.getElementById('angleWarning').style.display='none';
+  const body=document.getElementById('liPreviewBody');
+  if(body){body.focus();body.scrollIntoView({behavior:'smooth',block:'center'});}
+}
+function proceedDespiteAngle(){
+  angleAcknowledged=true;
+  document.getElementById('angleWarning').style.display='none';
+  confirmPublish();
+}
+function closeAngleWarning(){
+  document.getElementById('angleWarning').style.display='none';
+}
+function proceedDespiteSlot(){
+  slotAcknowledged=true;
+  document.getElementById('angleWarning').style.display='none';
+  confirmPublish();
+}
+function buildFinalText(){
+  let text=currentDraftRaw;
+  if(includeLink){
+    const link=(document.getElementById('publishLinkInput').value||'').trim();
+    if(link)text=text+'\n\n'+link;
+  }
+  return text;
+}
+async function doPublishOrSchedule(pass,schedDate,err){
+  const finalText=buildFinalText();
   if(schedDate){
     // Programar
     showLoading('Programando publicación...');
     try{
-      const r=await fetch('/api/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:currentDraftRaw,scheduledAt:schedDate,publishPassword:pass})});
+      const r=await fetch('/api/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:finalText,scheduledAt:schedDate,publishPassword:pass})});
       const d=await r.json();hideLoading();
-      if(d.ok){closePublishModal();alert('✅ Post programado para '+fmtDate(schedDate));loadScheduled();}
+      if(d.ok){closePublishModal();alert('✅ Post programado para '+fmtDate(schedDate)+(attachedImage?'\n\n📎 Recuerda: la imagen aún no se publica automáticamente; súbela a mano cuando salga.':''));loadScheduled();}
       else if(d.error==='wrong_publish_password'){err.textContent='Contraseña de publicación incorrecta';}
       else{err.textContent=d.error||'No se pudo programar';}
     }catch(e){hideLoading();err.textContent='Error al programar';}
@@ -610,9 +875,9 @@ async function confirmPublish(){
     // Publicar ahora
     showLoading('Publicando en LinkedIn...');
     try{
-      const r=await fetch('/api/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:currentDraftRaw,publishPassword:pass})});
+      const r=await fetch('/api/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:finalText,publishPassword:pass})});
       const d=await r.json();hideLoading();
-      if(d.ok){closePublishModal();alert('✅ ¡Publicado en LinkedIn!');}
+      if(d.ok){closePublishModal();alert('✅ ¡Publicado en LinkedIn!'+(attachedImage?'\n\n📎 Recuerda subir la imagen manualmente: la publicación automática de imagen llegará pronto.':''));}
       else if(d.error==='wrong_publish_password'){err.textContent='Contraseña de publicación incorrecta';}
       else{err.textContent=d.error||'No se pudo publicar';}
     }catch(e){hideLoading();err.textContent='Error al publicar';}
@@ -880,7 +1145,82 @@ async function loadMetrics(){
     c.innerHTML=posts.map(p=>'<div class="metric-card"><div class="metric-title">'+(p.body||'').slice(0,80)+'...</div><div class="metric-grid"><div class="metric-stat"><div class="metric-val">'+(p.metrics?.impressions||0)+'</div><div class="metric-label">Impres.</div></div><div class="metric-stat"><div class="metric-val">'+(p.metrics?.reactions||0)+'</div><div class="metric-label">Reacc.</div></div><div class="metric-stat"><div class="metric-val">'+(p.metrics?.comments||0)+'</div><div class="metric-label">Coment.</div></div><div class="metric-stat"><div class="metric-val">'+(p.metrics?.shares||0)+'</div><div class="metric-label">Compart.</div></div></div></div>').join('');
   }catch(e){}
 }
+// ── Datos de franjas horarias (España, 2026). Valor = % de impacto relativo (0-100) ──
+// Días: L,M,X,J,V (0-4). Horas: de 7:30 a 19:00 en bloques.
+const SLOT_HOURS=['7:30–8:30','8:30–9:30','9:30–11:00','11:00–12:00','12:00–13:00','13:00–14:00','14:00–16:00','16:00–17:00','17:00–18:00','18:00–19:00'];
+const SLOT_DAYS=['Lun','Mar','Mié','Jue','Vie'];
+// Matriz [hora][día] con % de impacto. Basado en: martes-jueves fuertes; franjas 7:30-8:30, 12-13 y 17-18 buenas; lunes/viernes flojos.
+const SLOT_GRID=[
+  /*7:30-8:30*/ [55,75,80,78,50],
+  /*8:30-9:30*/ [50,78,82,80,48],
+  /*9:30-11*/   [45,85,90,88,45],
+  /*11-12*/     [42,82,88,85,42],
+  /*12-13*/     [48,80,85,82,55],
+  /*13-14*/     [38,65,70,68,40],
+  /*14-16*/     [40,58,62,60,35],
+  /*16-17*/     [35,60,65,68,32],
+  /*17-18*/     [45,70,72,74,38],
+  /*18-19*/     [40,55,58,60,30]
+];
+function slotColor(v){
+  if(v>=80)return '#1a8c5a';      // verde fuerte
+  if(v>=65)return '#5cb85c';      // verde
+  if(v>=50)return '#e0a83c';      // ámbar
+  if(v>=40)return '#e07a3c';      // naranja
+  return '#c0504d';               // rojo (flojo)
+}
+function slotLabel(v){return v>=80?'Excelente':v>=65?'Buena':v>=50?'Aceptable':v>=40?'Floja':'Evitar';}
+function renderSlotTable(){
+  let h='<table class="slot-table"><thead><tr><th>Franja</th>'+SLOT_DAYS.map(d=>'<th>'+d+'</th>').join('')+'</tr></thead><tbody>';
+  SLOT_HOURS.forEach((hr,i)=>{
+    h+='<tr><td class="hour">'+hr+'</td>'+SLOT_GRID[i].map(v=>'<td style="background:'+slotColor(v)+';color:#fff;font-weight:600" title="'+slotLabel(v)+'">'+v+'%</td>').join('')+'</tr>';
+  });
+  h+='</tbody></table>';
+  h+='<div class="slot-legend"><span><i class="slot-dot" style="background:#1a8c5a"></i>Excelente (80%+)</span><span><i class="slot-dot" style="background:#5cb85c"></i>Buena (65-79%)</span><span><i class="slot-dot" style="background:#e0a83c"></i>Aceptable (50-64%)</span><span><i class="slot-dot" style="background:#e07a3c"></i>Floja (40-49%)</span><span><i class="slot-dot" style="background:#c0504d"></i>Evitar (&lt;40%)</span></div>';
+  return h;
+}
+function renderGuide(){
+  const c=document.getElementById('guideContainer');
+  if(!c)return;
+  const G=[
+    {icon:'🎯',tag:'do',tagtxt:'HAZLO',title:'Tono: útil, no “inteligente”',
+     body:'LinkedIn premia ser útil, no sonar listo. Comparte una opinión clara y oportuna sobre las tendencias del sector, no resúmenes de noticias. Tu ventaja es tu experiencia: aporta la lectura de fondo que solo alguien de dentro puede dar. Una postura ligeramente a contracorriente (pero profesional) genera debate.',
+     src:'Rosica · Digitally Bugged · Postiv',url:'https://www.rosica.com/2026/02/23/linkedin-thought-leadership-tips-for-2026/'},
+    {icon:'📏',tag:'do',tagtxt:'HAZLO',title:'Longitud: apunta a 1.200–1.600 caracteres',
+     body:'El contenido más largo y sustancioso rinde mejor porque genera dwell time (tiempo de lectura), señal de calidad para el algoritmo. Los posts de +2.000 caracteres logran ~2,56% de engagement frente a ~1,53% de los muy cortos. Los de menos de 500 penalizan (se interpretan como bajo esfuerzo). Para empezar, la franja 1.200–1.600 es ideal: desarrollas una idea sin abrumar.',
+     src:'Taplio (millones de posts) · AuthoredUp · Buffer',url:'https://taplio.com/blog/how-long-should-a-linkedin-post-be'},
+    {icon:'📅',tag:'do',tagtxt:'HAZLO',title:'Días y franjas (España)',
+     body:'Martes, miércoles y jueves son los días fuertes; lunes y viernes flojean. Las mejores franjas: 7:30–8:30, 12:00–13:00 y sobre todo 9:30–12:00. Para medios/software, la audiencia consulta el feed por la mañana. Clave: el algoritmo evalúa el rendimiento en los primeros 60-90 min, así que publica cuando tu red esté conectada.',
+     src:'Clonio · Kanbox · Growth LinkedIn España',url:'https://clonio.es/blog/mejores-horarios-publicar-linkedin',
+     extra:renderSlotTable()},
+    {icon:'😊',tag:'do',tagtxt:'HAZLO',title:'Emojis: sí, pero pocos',
+     body:'Los posts con emojis obtienen de media un 20-30% más de engagement. Funcionan sobre todo para estructurar (separar bloques, marcar el gancho). El límite: no sobrecargar ni caer en lo informal si tu perfil es de analista. 1 en el hook y alguno para separar ideas es suficiente.',
+     src:'Word Counter Tool',url:'https://www.wordcountertool.net/blog/ideal-linkedin-post-length'},
+    {icon:'#️⃣',tag:'dont',tagtxt:'MATIZ',title:'Hashtags: casi irrelevantes ya',
+     body:'En 2026 el algoritmo distribuye por modelado de temas y comportamiento, no por hashtags. Lo que de verdad enseña al algoritmo de qué hablas son las palabras clave del propio texto. Usa 3-5 hashtags máximo, y asegúrate de que el cuerpo use el vocabulario del sector (streaming, OTT, distribución, audiencias). Donde sí ayudan: eventos concretos (hasta +25%).',
+     src:'ConnectSafely · van der Blom (1,3M posts)',url:'https://melaniegoodmanlinkedinconsultant.substack.com/p/linkedin-algorithm-2026-reach-topic-authority'},
+    {icon:'🔗',tag:'dont',tagtxt:'EVÍTALO',title:'Enlace externo en el cuerpo: penaliza',
+     body:'Un enlace externo en el cuerpo reduce el alcance mediano un 18,8% (estudio de 1,3M posts), y la penalización se ha agravado en 2026. El viejo truco de “link en el primer comentario” ya no está claro que funcione. Mejor: lanza tu opinión sin enlace y acompaña con una imagen. Imagen + texto largo es la mejor combinación (2,77% engagement vs 1,98% de solo texto).',
+     src:'van der Blom · Digital Applied · Taplio',url:'https://www.digitalapplied.com/blog/linkedin-algorithm-2026-engagement-strategy-guide'},
+    {icon:'❓',tag:'dont',tagtxt:'MATIZ',title:'Cerrar con pregunta: con cuidado',
+     body:'La pregunta genuina va bien, pero el “cebo de engagement” (“escribe 1 si estás de acuerdo”) se penaliza. Y ojo: con poca audiencia, el problema no suele ser la pregunta, sino que pocos ven el post. En vez de “¿qué opináis?” genérico, cierra con una pregunta específica de experiencia, o con una afirmación con opinión fuerte que invite a discrepar. Comenta en posts de otros 15 min antes de publicar: sube tu alcance inicial.',
+     src:'Digital Applied · ConnectSafely · Sprout Social',url:'https://sproutsocial.com/insights/linkedin-algorithm/'},
+    {icon:'🌍',tag:'do',tagtxt:'CRITERIO',title:'¿Español o inglés? Empieza en español',
+     body:'El sector es global y en inglés está la conversación internacional, pero tu red actual y tu credibilidad inmediata están en el mercado hispano. El algoritmo cruza tu contenido con tu perfil y tu red, y necesitas esa interacción temprana de quien te conoce para arrancar. Cuando tengas tracción, prueba posts puntuales en inglés para temas globales.',
+     src:'Sales & Marketing Engineers (feed ranking LLM)',url:'https://www.salesandmarketingengineers.co.uk/the-ultimate-linkedin-posting-guide-for-2026'}
+  ];
+  c.innerHTML=G.map(g=>
+    '<div class="guide-card">'
+    +'<span class="guide-tag '+g.tag+'">'+g.tagtxt+'</span>'
+    +'<h4>'+g.icon+' '+g.title+'</h4>'
+    +'<p>'+g.body+'</p>'
+    +(g.extra||'')
+    +'<div class="src">Fuente: <a href="'+g.url+'" target="_blank" rel="noopener">'+g.src+' ↗</a></div>'
+    +'</div>'
+  ).join('');
+}
 async function loadTips(){
+  renderGuide();
   const c=document.getElementById('tipsContainer');
   try{const r=await fetch('/api/tips');if(!r.ok){c.innerHTML='<div class="empty-state"><div class="empty-text">Conecta LinkedIn para ver tips personalizados.</div></div>';return;}
     const d=await r.json();
@@ -893,6 +1233,17 @@ function initApp(){
   loadHistoryFromDB();
   loadSources();
   buildToneMenu();updateToneText();
+  setupImageDrop();
+}
+function setupImageDrop(){
+  const drop=document.getElementById('imageDrop');
+  if(!drop)return;
+  ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('dragover');}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('dragover');}));
+  drop.addEventListener('drop',e=>{
+    const file=e.dataTransfer.files&&e.dataTransfer.files[0];
+    if(file){document.getElementById('publishImageInput').files=e.dataTransfer.files;onImagePicked({target:{files:[file]}});}
+  });
 }
 // Si volvemos de conectar LinkedIn, saltamos el lock (ya estaba desbloqueado antes)
 if(window.location.search.includes('connected=true')){
