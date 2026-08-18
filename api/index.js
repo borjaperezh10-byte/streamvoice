@@ -2,6 +2,24 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const path = require('path');
+const { authenticator } = require('otplib');
+
+// Tolerancia: acepta el código actual y el inmediatamente anterior/siguiente (±30s)
+// para evitar fallos por desfase de reloj entre el móvil y el servidor.
+authenticator.options = { window: 1 };
+
+// Valida un código TOTP de 6 dígitos contra el secreto en la variable de entorno.
+// Devuelve true si es válido. Si no hay secreto configurado, devuelve null (no configurado).
+function verifyTotp(code) {
+  const secret = process.env.TOTP_SECRET;
+  if (!secret) return null;
+  if (!code || !/^\d{6}$/.test(String(code).trim())) return false;
+  try {
+    return authenticator.verify({ token: String(code).trim(), secret });
+  } catch (e) {
+    return false;
+  }
+}
 
 const app = express();
 app.use(express.json());
@@ -54,18 +72,19 @@ const store = {
   userProfile: null
 };
 
-// ─── SEGURIDAD DE ACCESO ────────────────────────────────────────────────────
-// Verifica la contraseña de acceso a la app
+// ─── SEGURIDAD DE ACCESO (Google Authenticator / TOTP) ──────────────────────
+// Verifica el código de 6 dígitos de la app de autenticación para acceder a la app
 app.post('/api/access', (req, res) => {
-  const { password } = req.body;
-  if (!process.env.ACCESS_PASSWORD) {
-    // Si no se ha configurado contraseña, se permite el acceso (para no bloquear)
-    return res.json({ ok: true, noPasswordSet: true });
+  const { code } = req.body;
+  const result = verifyTotp(code);
+  if (result === null) {
+    // No hay secreto TOTP configurado: se permite el acceso para no bloquear la app
+    return res.json({ ok: true, noAuthSet: true });
   }
-  if (password === process.env.ACCESS_PASSWORD) {
+  if (result === true) {
     return res.json({ ok: true });
   }
-  return res.status(403).json({ ok: false, error: 'Contraseña incorrecta' });
+  return res.status(403).json({ ok: false, error: 'Código incorrecto o caducado' });
 });
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
@@ -137,12 +156,13 @@ async function requireAuth(req, res, next) {
 // ─── PUBLISH ──────────────────────────────────────────────────────────────────
 
 app.post('/api/publish', requireAuth, async (req, res) => {
-  const { text, scheduledAt, publishPassword } = req.body;
+  const { text, scheduledAt, code } = req.body;
   if (!text) return res.status(400).json({ error: 'Missing text' });
 
-  // Verificar contraseña de publicación (segunda barrera de seguridad)
-  if (process.env.PUBLISH_PASSWORD && publishPassword !== process.env.PUBLISH_PASSWORD) {
-    return res.status(403).json({ error: 'wrong_publish_password', detail: 'Contraseña de publicación incorrecta.' });
+  // Verificar código de la app de autenticación (segunda barrera de seguridad)
+  const totp = verifyTotp(code);
+  if (totp === false) {
+    return res.status(403).json({ error: 'wrong_code', detail: 'Código de autenticación incorrecto o caducado.' });
   }
 
   // Publish now
@@ -202,10 +222,11 @@ async function publishToLinkedIn(text, session) {
 // ─── PROGRAMACIÓN DE POSTS ──────────────────────────────────────────────────
 // Programar un post para el futuro
 app.post('/api/schedule', requireAuth, async (req, res) => {
-  const { text, scheduledAt, publishPassword } = req.body;
+  const { text, scheduledAt, code } = req.body;
   if (!text || !scheduledAt) return res.status(400).json({ error: 'Faltan datos' });
-  if (process.env.PUBLISH_PASSWORD && publishPassword !== process.env.PUBLISH_PASSWORD) {
-    return res.status(403).json({ error: 'wrong_publish_password', detail: 'Contraseña de publicación incorrecta.' });
+  const totp = verifyTotp(code);
+  if (totp === false) {
+    return res.status(403).json({ error: 'wrong_code', detail: 'Código de autenticación incorrecto o caducado.' });
   }
   if (new Date(scheduledAt) <= new Date()) {
     return res.status(400).json({ error: 'La fecha debe ser futura' });
@@ -230,9 +251,10 @@ app.get('/api/scheduled', async (req, res) => {
 
 // Editar un post programado (texto y/o fecha)
 app.patch('/api/scheduled/:id', requireAuth, async (req, res) => {
-  const { text, scheduledAt, publishPassword } = req.body;
-  if (process.env.PUBLISH_PASSWORD && publishPassword !== process.env.PUBLISH_PASSWORD) {
-    return res.status(403).json({ error: 'wrong_publish_password', detail: 'Contraseña de publicación incorrecta.' });
+  const { text, scheduledAt, code } = req.body;
+  const totp = verifyTotp(code);
+  if (totp === false) {
+    return res.status(403).json({ error: 'wrong_code', detail: 'Código de autenticación incorrecto o caducado.' });
   }
   const patch = {};
   if (text) patch.text = text;
