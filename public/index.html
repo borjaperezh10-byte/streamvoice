@@ -183,6 +183,8 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .draft-hist-text{font-size:12px;color:var(--text);line-height:1.6;white-space:pre-wrap;word-break:break-word;background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:8px;max-height:160px;overflow-y:auto}
 .draft-hist-actions{display:flex;gap:6px;justify-content:flex-end}
 .draft-hist-actions .icon-btn{padding:6px 10px;font-size:12px}
+.draft-hist-actions .resume-btn{background:var(--blue-dim);color:var(--blue);border-color:rgba(79,168,255,0.3);font-weight:500}
+.draft-hist-actions .resume-btn:hover{background:rgba(79,168,255,0.18)}
 .guide-updated{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 13px;margin-bottom:14px}
 .guide-updated b{color:var(--text)}
 .guide-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px}
@@ -388,7 +390,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="cost-amount" id="costAmount">$0.00</div>
         <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
       </div>
-      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v2.8 · 17 jul 2026</span></div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v3.0 · 18 ago 2026</span></div>
     </div>
   </div>
   <div class="tab-view active" id="tab-discover">
@@ -1126,7 +1128,7 @@ async function loadDraftHistory(){
         +'<div class="tip-header"><span style="font-size:16px">📝</span><span class="tip-title">'+newsLabel+'</span><span class="tip-priority" style="background:var(--blue-dim);color:var(--blue)">'+fmtDate(d.created_at)+'</span></div>'
         +'<div class="draft-hist-meta"><span>🎭 '+esc(tones)+'</span><span>🔢 '+(d.char_count||0)+' caracteres</span>'+newsUrl+'</div>'
         +'<div class="draft-hist-text">'+esc(d.draft_text)+'</div>'
-        +'<div class="draft-hist-actions"><button class="icon-btn" onclick="copyDraftHistText(\''+d.id+'\')" title="Copiar">📋 Copiar</button><button class="icon-btn" onclick="deleteDraftHistory(\''+d.id+'\')" title="Borrar">🗑️ Borrar</button></div>'
+        +'<div class="draft-hist-actions"><button class="icon-btn resume-btn" onclick="resumeDraft(\''+d.id+'\')" title="Retomar en el editor">↩️ Retomar</button><button class="icon-btn" onclick="copyDraftHistText(\''+d.id+'\')" title="Copiar">📋 Copiar</button><button class="icon-btn" onclick="deleteDraftHistory(\''+d.id+'\')" title="Borrar">🗑️ Borrar</button></div>'
         +'</div>';
     }).join('');
     window._draftHistCache=rows;
@@ -1135,6 +1137,43 @@ async function loadDraftHistory(){
 function copyDraftHistText(id){
   const row=(window._draftHistCache||[]).find(d=>d.id===id);
   if(row)navigator.clipboard.writeText(row.draft_text||'');
+}
+// Retomar un borrador: lo carga en la caja del panel derecho, restaura tono y longitud,
+// vuelve a la pestaña Descubrir y hace scroll a la caja para seguir editando/publicando.
+function resumeDraft(id){
+  const row=(window._draftHistCache||[]).find(d=>d.id===id);
+  if(!row)return;
+  // 1. Cargar el texto en la caja de borrador (editable)
+  currentDraftRaw=row.draft_text||'';
+  renderDraftArea(currentDraftRaw);
+  document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
+  const st=document.getElementById('charStatus');if(st){st.textContent='↩️ Retomado';st.style.color='var(--blue)';}
+  // Habilitar botones de publicar/programar si LinkedIn está conectado
+  document.getElementById('pubBtn').disabled=!isConnected;
+  document.getElementById('schedBtn').disabled=!isConnected;
+  // 2. Restaurar tonos (si se guardaron y siguen siendo válidos)
+  if(Array.isArray(row.tones)&&row.tones.length){
+    const valid=row.tones.filter(t=>TONE_LABELS[t]);
+    if(valid.length){selectedTones=valid.slice();buildToneMenu();updateToneText();}
+  }
+  // 3. Inferir la longitud a partir del nº de caracteres guardado (aprox. a la opción más cercana)
+  if(row.char_count){
+    const targets={1:500,2:800,3:1000,4:1200,5:1400,6:1600};
+    let best=3,bestDiff=Infinity;
+    for(const k in targets){const diff=Math.abs(targets[k]-row.char_count);if(diff<bestDiff){bestDiff=diff;best=parseInt(k);}}
+    currentLength=best;
+    const slider=document.getElementById('lengthSlider');if(slider)slider.value=best;
+    updateLength(best);
+  }
+  // 4. Volver a la pestaña Descubrir (donde se trabaja) y activar su nav-tab
+  const discoverTab=[...document.querySelectorAll('.nav-tab')].find(x=>x.textContent.includes('Descubrir'));
+  if(discoverTab)showTab('discover',discoverTab);
+  // 5. Scroll suave hasta la caja de borrador del panel derecho
+  setTimeout(()=>{
+    const da=document.getElementById('draftArea');
+    if(da)da.scrollIntoView({behavior:'smooth',block:'center'});
+    const ta=document.getElementById('draftEditArea');if(ta)ta.focus();
+  },150);
 }
 async function deleteDraftHistory(id){
   if(!confirm('¿Borrar este borrador del historial?'))return;
