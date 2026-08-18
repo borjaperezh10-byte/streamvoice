@@ -356,11 +356,12 @@ app.post('/api/generate', async (req, res) => {
   const { topic, profile, tones, length } = req.body;
 
   const lengthMap = {
-    l100: 'MÁXIMO 100 caracteres. Ultra breve: una o dos frases potentes, como un titular con gancho. NO te extiendas.',
-    l300: 'MÁXIMO 300 caracteres (unas 3-4 frases). Muy conciso y directo. NO te extiendas más.',
-    l500: 'MÁXIMO 500 caracteres. Breve pero con algo de desarrollo. NO te extiendas más.',
-    l700: 'aproximadamente 700 caracteres (ni mucho más ni mucho menos).',
-    l1000: 'aproximadamente 1000 caracteres. Desarrollo completo pero sin pasarte de 1100.'
+    l500: 'aproximadamente 500 caracteres. Breve pero con una idea desarrollada. Es una cifra orientativa, no un límite estricto.',
+    l800: 'aproximadamente 800 caracteres. Conciso pero con desarrollo completo de la idea. Cifra orientativa.',
+    l1000: 'aproximadamente 1000 caracteres. Desarrollo completo con espacio para matices. Cifra orientativa (±100 está bien).',
+    l1200: 'aproximadamente 1200 caracteres. Desarrollo amplio, ideal para dar contexto y lectura estratégica. Cifra orientativa (±150 está bien).',
+    l1400: 'aproximadamente 1400 caracteres. Post sustancioso con espacio para varios ángulos. Cifra orientativa (±150 está bien).',
+    l1600: 'aproximadamente 1600 caracteres. Post extenso y con profundidad, en la franja de mayor engagement de LinkedIn. Cifra orientativa (±200 está bien).'
   };
 
   // 38 tonos con su descripción y si llevan emojis
@@ -427,6 +428,8 @@ Tono (combina estos matices): ${toneInstruction}
 Idioma: ${langInstruction}
 Longitud objetivo: ${lengthMap[length] || lengthMap.l500}
 
+PRINCIPIO RECTOR (por encima de todo lo demás): el post debe ser ÚTIL, no lucirse. No resumas la noticia: da una OPINIÓN CLARA y aporta CLARIDAD sobre lo que esa tendencia significa para el sector. El lector tiene que terminar sabiendo algo que no sabía o viendo el tema de una forma nueva. Si el borrador se limita a contar lo que pasó, ha fallado. Toma una postura, mójate con criterio propio, explica el "y esto qué implica".
+
 ESTILO OBLIGATORIO (imita EXACTAMENTE este patrón, basado en posts de referencia del sector):
 
 1. PRIMERA LÍNEA (el gancho): arranca con un dato, cifra, ejemplo real o una tesis con giro. Nunca con preámbulos ("Hoy quiero hablar de", "Es interesante ver"). Recursos válidos: una paradoja ("creció 13% pero sus acciones cayeron 6%"), un giro ("se ha contado como X, pero su interés real va más allá"), o una afirmación fuerte y concreta.
@@ -457,8 +460,8 @@ Solo el texto del post, listo para copiar.`
     }];
 
     // max_tokens proporcional a la longitud pedida (evita que se alargue de más)
-    const tokensByLength = { l100: 150, l300: 300, l500: 450, l700: 600, l1000: 900 };
-    const maxTok = tokensByLength[length] || 600;
+    const tokensByLength = { l500: 450, l800: 700, l1000: 900, l1200: 1050, l1400: 1200, l1600: 1350 };
+    const maxTok = tokensByLength[length] || 900;
     // Si hay URL, necesita más tokens porque además lee/procesa la web
     const finalMaxTok = (customSource && customSource.url) ? maxTok + 400 : maxTok;
 
