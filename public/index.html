@@ -334,7 +334,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
           <img id="imagePreview" style="max-width:100%;border-radius:8px;border:1px solid var(--border)">
           <button class="icon-btn" style="margin-top:6px;padding:6px 10px;font-size:12px" onclick="clearImage()">🗑️ Quitar imagen</button>
         </div>
-        <div class="pub-hint" id="imageNote">ℹ️ Por ahora la imagen es solo para tu previsualización. La publicación automática de la imagen en LinkedIn llegará en una próxima versión; de momento súbela manualmente al publicar.</div>
+        <div class="pub-hint" id="imageNote">ℹ️ La imagen se publicará junto al post al usar <b>"Publicar ahora"</b>. En posts <b>programados</b> aún no se adjunta automáticamente (próxima versión); si programas, súbela a mano cuando salga.</div>
       </div>
     </div>
 
@@ -390,7 +390,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="cost-amount" id="costAmount">$0.00</div>
         <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
       </div>
-      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v3.0 · 18 ago 2026</span></div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v3.1 · 18 ago 2026</span></div>
     </div>
   </div>
   <div class="tab-view active" id="tab-discover">
@@ -871,18 +871,21 @@ async function doPublishOrSchedule(pass,schedDate,err){
     try{
       const r=await fetch('/api/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:finalText,scheduledAt:schedDate,code:pass})});
       const d=await r.json();hideLoading();
-      if(d.ok){closePublishModal();alert('✅ Post programado para '+fmtDate(schedDate)+(attachedImage?'\n\n📎 Recuerda: la imagen aún no se publica automáticamente; súbela a mano cuando salga.':''));loadScheduled();}
+      if(d.ok){closePublishModal();alert('✅ Post programado para '+fmtDate(schedDate)+(attachedImage?'\n\n📎 Nota: la imagen no se adjunta en posts programados todavía; súbela a mano cuando salga.':''));loadScheduled();}
       else if(d.error==='wrong_code'){err.textContent='Código incorrecto o caducado';}
       else{err.textContent=d.error||'No se pudo programar';}
     }catch(e){hideLoading();err.textContent='Error al programar';}
   }else{
     // Publicar ahora
-    showLoading('Publicando en LinkedIn...');
+    showLoading(attachedImage?'Subiendo imagen y publicando...':'Publicando en LinkedIn...');
     try{
-      const r=await fetch('/api/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:finalText,code:pass})});
+      const body={text:finalText,code:pass};
+      if(attachedImage&&attachedImage.dataUrl)body.image=attachedImage.dataUrl;
+      const r=await fetch('/api/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const d=await r.json();hideLoading();
-      if(d.ok){closePublishModal();alert('✅ ¡Publicado en LinkedIn!'+(attachedImage?'\n\n📎 Recuerda subir la imagen manualmente: la publicación automática de imagen llegará pronto.':''));}
+      if(d.ok){closePublishModal();alert('✅ ¡Publicado en LinkedIn!'+(d.withImage?' 🖼️ Con imagen incluida.':''));}
       else if(d.error==='wrong_code'){err.textContent='Código incorrecto o caducado';}
+      else if(d.error==='image_upload_failed'){err.textContent='No se pudo subir la imagen. El texto no se ha publicado. Revisa el formato/tamaño e inténtalo de nuevo.';}
       else{err.textContent=d.error||'No se pudo publicar';}
     }catch(e){hideLoading();err.textContent='Error al publicar';}
   }
