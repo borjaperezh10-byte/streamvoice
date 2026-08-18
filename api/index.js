@@ -22,7 +22,7 @@ function verifyTotp(code) {
 }
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '../public')));
 
 // ─── SUPABASE (almacenamiento persistente) ─────────────────────────────────────
@@ -156,7 +156,7 @@ async function requireAuth(req, res, next) {
 // ─── PUBLISH ──────────────────────────────────────────────────────────────────
 
 app.post('/api/publish', requireAuth, async (req, res) => {
-  const { text, scheduledAt, code } = req.body;
+  const { text, scheduledAt, code, image } = req.body;
   if (!text) return res.status(400).json({ error: 'Missing text' });
 
   // Verificar código de la app de autenticación (segunda barrera de seguridad)
@@ -167,7 +167,17 @@ app.post('/api/publish', requireAuth, async (req, res) => {
 
   // Publish now
   try {
-    const result = await publishToLinkedIn(text, req.linkedinSession);
+    // Si viene imagen, la subimos primero a LinkedIn y obtenemos su asset URN
+    let imageAsset = null;
+    if (image) {
+      try {
+        imageAsset = await uploadImageToLinkedIn(image, req.linkedinSession);
+      } catch (imgErr) {
+        console.error('Image upload error:', imgErr.response?.data || imgErr.message);
+        return res.status(500).json({ error: 'image_upload_failed', detail: imgErr.response?.data || imgErr.message });
+      }
+    }
+    const result = await publishToLinkedIn(text, req.linkedinSession, imageAsset);
     // Guardar en el historial de publicados
     try {
       await sbUpsert('scheduled_posts', {
@@ -178,20 +188,78 @@ app.post('/api/publish', requireAuth, async (req, res) => {
         linkedin_id: result.linkedinId
       });
     } catch(e) { console.error('No se pudo guardar en historial:', e.message); }
-    res.json({ ok: true, status: 'published', linkedinId: result.linkedinId });
+    res.json({ ok: true, status: 'published', linkedinId: result.linkedinId, withImage: !!imageAsset });
   } catch (err) {
     console.error('Publish error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Failed to publish', detail: err.response?.data });
   }
 });
 
-// Función reutilizable para publicar en LinkedIn
-async function publishToLinkedIn(text, session) {
+// Sube una imagen a LinkedIn (API clásica de assets) y devuelve su asset URN.
+// imageDataUrl: cadena base64 tipo "data:image/png;base64,AAAA..."
+async function uploadImageToLinkedIn(imageDataUrl, session) {
   const authorId = session.profile?.sub;
-  // Detectar si el post contiene una URL → declararla como artículo para que salga el preview
+  const authorUrn = `urn:li:person:${authorId}`;
+
+  // 1. Registrar la subida
+  const registerPayload = {
+    registerUploadRequest: {
+      recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
+      owner: authorUrn,
+      serviceRelationships: [
+        { relationshipType: 'OWNER', identifier: 'urn:li:userGeneratedContent' }
+      ]
+    }
+  };
+  const regRes = await axios.post(
+    'https://api.linkedin.com/v2/assets?action=registerUpload',
+    registerPayload,
+    { headers: {
+        Authorization: `Bearer ${session.accessToken}`,
+        'Content-Type': 'application/json',
+        'X-Restli-Protocol-Version': '2.0.0'
+    }}
+  );
+  const uploadUrl = regRes.data?.value?.uploadMechanism?.
+    ['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']?.uploadUrl;
+  const asset = regRes.data?.value?.asset;
+  if (!uploadUrl || !asset) {
+    throw new Error('LinkedIn no devolvió uploadUrl/asset al registrar la imagen');
+  }
+
+  // 2. Convertir base64 → binario
+  const match = /^data:(image\/[a-zA-Z+]+);base64,(.+)$/.exec(imageDataUrl || '');
+  if (!match) throw new Error('Formato de imagen no válido (se esperaba data URL base64)');
+  const contentType = match[1];
+  const binary = Buffer.from(match[2], 'base64');
+
+  // 3. Subir el binario a la URL temporal
+  await axios.put(uploadUrl, binary, {
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+      'Content-Type': contentType
+    },
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity
+  });
+
+  return asset; // urn:li:digitalmediaAsset:...
+}
+
+// Función reutilizable para publicar en LinkedIn.
+// imageAsset (opcional): urn:li:digitalmediaAsset:... ya subido, para adjuntar una imagen.
+async function publishToLinkedIn(text, session, imageAsset) {
+  const authorId = session.profile?.sub;
   const urlMatch = text.match(/https?:\/\/[^\s]+/);
   let shareContent;
-  if (urlMatch) {
+  if (imageAsset) {
+    // Con imagen propia: prioriza la imagen (no se combina con preview de artículo)
+    shareContent = {
+      shareCommentary: { text },
+      shareMediaCategory: 'IMAGE',
+      media: [{ status: 'READY', media: imageAsset }]
+    };
+  } else if (urlMatch) {
     shareContent = {
       shareCommentary: { text },
       shareMediaCategory: 'ARTICLE',
