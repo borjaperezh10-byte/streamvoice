@@ -26,13 +26,19 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '../public')));
 
 // ─── SUPABASE (almacenamiento persistente) ─────────────────────────────────────
+// Usamos la clave "service_role", no la anónima: con RLS cerrado (sin políticas
+// para el rol público), solo service_role puede leer/escribir, saltándose el RLS
+// por diseño. Así, aunque la clave anónima se filtrara algún día, no serviría de nada.
 const SB_URL = process.env.SUPABASE_URL;
-const SB_KEY = process.env.SUPABASE_ANON_KEY;
+const SB_KEY = process.env.SUPABASE_SERVICE_KEY;
 const sbHeaders = {
   'apikey': SB_KEY,
   'Authorization': `Bearer ${SB_KEY}`,
   'Content-Type': 'application/json'
 };
+if (!SB_KEY) {
+  console.error('⚠️  Falta la variable de entorno SUPABASE_SERVICE_KEY. La app no podrá leer/escribir en Supabase.');
+}
 // Como la app la usa una sola persona, usamos un identificador fijo para "la" sesión
 const SESSION_ID = 'borja-main';
 
