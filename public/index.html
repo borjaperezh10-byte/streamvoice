@@ -56,6 +56,10 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .src-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:6px}
 .src-card-name{font-size:14px;font-weight:600;color:var(--text)}
 .src-card-desc{font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:10px}
+.src-sector-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+.sector-chip{font-size:10.5px;padding:3px 8px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted2);cursor:pointer;transition:all .15s;white-space:nowrap}
+.sector-chip:hover{border-color:var(--border2);color:var(--muted)}
+.sector-chip.on{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent)}
 .src-card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .src-visit{font-size:11px;color:var(--blue);text-decoration:none;display:inline-flex;align-items:center;gap:3px}
 .src-visit:hover{text-decoration:underline}
@@ -374,12 +378,12 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
     <div class="sidebar-scroll">
       <div class="sec-label">Temáticas</div>
       <div class="sector-list">
-        <div class="sector-tag active" onclick="setSector(this,'streaming SVOD Netflix Disney HBO 2026')"><span class="icon">📺</span>Streaming & SVOD</div>
-        <div class="sector-tag" onclick="setSector(this,'FAST channels free ad-supported TV 2026')"><span class="icon">📡</span>FAST & Free TV</div>
-        <div class="sector-tag" onclick="setSector(this,'operadores Pay TV cable cord-cutting 2026')"><span class="icon">🔌</span>Operadores</div>
-        <div class="sector-tag" onclick="setSector(this,'producción audiovisual contenidos distribución 2026')"><span class="icon">🎬</span>Contenido</div>
-        <div class="sector-tag" onclick="setSector(this,'CTV programmatic advertising monetización 2026')"><span class="icon">⚙️</span>Ad Tech & CTV</div>
-        <div class="sector-tag" onclick="setSector(this,'media deals partnerships distribución OTT 2026')"><span class="icon">🤝</span>Partnerships</div>
+        <div class="sector-tag active" onclick="setSector(this,'streaming SVOD Netflix Disney HBO 2026','streaming')"><span class="icon">📺</span>Streaming & SVOD</div>
+        <div class="sector-tag" onclick="setSector(this,'FAST channels free ad-supported TV 2026','fast')"><span class="icon">📡</span>FAST & Free TV</div>
+        <div class="sector-tag" onclick="setSector(this,'operadores Pay TV cable cord-cutting 2026','operadores')"><span class="icon">🔌</span>Operadores</div>
+        <div class="sector-tag" onclick="setSector(this,'producción audiovisual contenidos distribución 2026','contenido')"><span class="icon">🎬</span>Contenido</div>
+        <div class="sector-tag" onclick="setSector(this,'CTV programmatic advertising monetización 2026','adtech')"><span class="icon">⚙️</span>Ad Tech & CTV</div>
+        <div class="sector-tag" onclick="setSector(this,'media deals partnerships distribución OTT 2026','partnerships')"><span class="icon">🤝</span>Partnerships</div>
       </div>
       <div class="sec-label">Tu perfil</div>
       <div class="profile-block"><textarea id="profileInput" rows="5">Affiliates & Business Development Sr. Manager en Paramount International. +15 años en estrategia multiplataforma. Especializado en OTT, FAST, SVOD, AVOD, partnerships de distribución en mercados europeo e iberoamericano.</textarea></div>
@@ -390,7 +394,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="cost-amount" id="costAmount">$0.00</div>
         <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
       </div>
-      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v3.1 · 18 ago 2026</span></div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v3.3 · 17 sep 2026</span></div>
     </div>
   </div>
   <div class="tab-view active" id="tab-discover">
@@ -492,11 +496,14 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 <div class="loading-overlay" id="loadingOverlay"><div class="loading-spinner"></div><div class="loading-text" id="loadingText">Cargando...</div></div>
 <script>
 let currentSector='streaming SVOD Netflix Disney HBO 2026';
+let currentSectorId='streaming';
 let selectedTones=['opinionado'],currentLength=3,allTopics=[],currentDraftRaw='',lastTopicIdx=null,isConnected=false,generating=false,currentLang='es',includeLink=false,attachedImage=null;
 function setLang(l,btn){currentLang=l;document.querySelectorAll('.lang-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
 let historyData2=[];
 // ── Gestión de fuentes ──
 const CAT_LABELS={medios:'📰 Medios especializados',sector:'📺 Sector audiovisual',tech:'⚙️ Tecnología y Ad Tech',general:'🌐 Generalistas',propias:'⭐ Fuentes propias'};
+// Categorías de búsqueda (mismas 6 que los botones de Descubrir). Sin ninguna marcada = la fuente aplica a todas.
+const SECTOR_CHIPS=[{id:'streaming',icon:'📺',label:'Streaming'},{id:'fast',icon:'📡',label:'FAST'},{id:'operadores',icon:'🔌',label:'Operadores'},{id:'contenido',icon:'🎬',label:'Contenido'},{id:'adtech',icon:'⚙️',label:'Ad Tech'},{id:'partnerships',icon:'🤝',label:'Partnerships'}];
 async function loadSources(){
   try{
     const r=await fetch('/api/sources');const srcs=await r.json();
@@ -515,7 +522,9 @@ async function loadSources(){
       html+='<div class="src-cat-label">'+(CAT_LABELS[cat]||cat)+'</div><div class="src-grid">';
       html+=cats[cat].map(s=>{
         const visit=s.url?'<a href="https://'+s.url.replace(/^https?:\/\//,'')+'" target="_blank" rel="noopener" class="src-visit">Visitar ↗</a>':'<span></span>';
-        return '<div class="src-card'+(s.active?'':' inactive')+'"><div class="src-card-head"><div class="src-card-name">'+s.name+'</div><button class="source-toggle '+(s.active?'on':'off')+'" onclick="toggleSource('+s.id+','+(!s.active)+')"></button></div><div class="src-card-desc">'+(s.description||'Sin descripción')+'</div><div class="src-card-foot">'+visit+'<button class="src-del" onclick="deleteSource('+s.id+')" title="Eliminar">🗑️</button></div></div>';
+        const secs=Array.isArray(s.sectors)?s.sectors:[];
+        const chips='<div class="src-sector-chips" title="Categorías de búsqueda en las que se usa esta fuente. Ninguna marcada = se usa en todas.">'+SECTOR_CHIPS.map(c=>'<button class="sector-chip'+(secs.includes(c.id)?' on':'')+'" onclick="toggleSourceSector('+s.id+',\''+c.id+'\',this)">'+c.icon+' '+c.label+'</button>').join('')+'</div>';
+        return '<div class="src-card'+(s.active?'':' inactive')+'"><div class="src-card-head"><div class="src-card-name">'+s.name+'</div><button class="source-toggle '+(s.active?'on':'off')+'" onclick="toggleSource('+s.id+','+(!s.active)+')"></button></div><div class="src-card-desc">'+(s.description||'Sin descripción')+'</div>'+chips+'<div class="src-card-foot">'+visit+'<button class="src-del" onclick="deleteSource('+s.id+')" title="Eliminar">🗑️</button></div></div>';
       }).join('');
       html+='</div>';
     });
@@ -537,6 +546,17 @@ async function addSource(){
 }
 async function toggleSource(id,active){
   try{await fetch('/api/sources/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({active})});loadSources();}catch(e){}
+}
+async function toggleSourceSector(id,sectorId,btn){
+  const card=btn.closest('.src-card');
+  const on=btn.classList.contains('on');
+  const chips=[...card.querySelectorAll('.sector-chip')];
+  // Recalcular a partir del estado visual actual de los chips de esta tarjeta
+  const ids=SECTOR_CHIPS.map(c=>c.id);
+  const activeIds=chips.map((c,i)=>c.classList.contains('on')?ids[i]:null).filter(Boolean);
+  const next=on?activeIds.filter(x=>x!==sectorId):[...activeIds,sectorId];
+  btn.classList.toggle('on');
+  try{await fetch('/api/sources/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({sectors:next})});}catch(e){btn.classList.toggle('on');}
 }
 async function deleteSource(id){
   if(!confirm('¿Eliminar esta fuente?'))return;
@@ -967,10 +987,11 @@ async function loadPublished(){
     }).join('');
   }catch(e){document.getElementById('publishedContainer').innerHTML='<div class="banner">Error al cargar el historial.</div>';}
 }
-function setSector(el,s){
+function setSector(el,s,sid){
   document.querySelectorAll('.sector-tag').forEach(x=>x.classList.remove('active'));
   el.classList.add('active');
   currentSector=s;
+  currentSectorId=sid||'';
   // Al cambiar de categoría, limpiar noticias y resetear el botón al estado inicial
   allTopics=[];
   document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">📡</div><div class="empty-text">Pulsa "Buscar tendencias" para descubrir lo que genera conversación ahora en esta categoría.</div></div>';
@@ -984,7 +1005,7 @@ async function fetchTopics(){
   const btn=document.getElementById('fetchBtn'),lbl=document.getElementById('fetchLabel');
   btn.disabled=true;lbl.innerHTML='<span class="spinner"></span> Buscando...';showLoading('Buscando noticias reales de los últimos 7 días... (puede tardar hasta 45s)');
   try{
-    const r=await fetch('/api/search-topics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sector:currentSector})});
+    const r=await fetch('/api/search-topics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sector:currentSector,sectorId:currentSectorId})});
     const data=await r.json();
     if(data.error==='rate_limited'){
       document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text"><b>Ya has buscado hoy en esta categoría</b><br><br>'+data.detail+'<br><br><span style="font-size:11px;color:var(--muted2)">Última búsqueda: '+fmtDate(data.lastSearch)+'</span></div></div>';
