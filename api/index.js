@@ -751,9 +751,12 @@ app.post('/api/sources', async (req, res) => {
 });
 
 app.patch('/api/sources/:id', async (req, res) => {
-  const { active } = req.body;
+  const { active, sectors } = req.body;
+  const patch = {};
+  if (active !== undefined) patch.active = active;
+  if (sectors !== undefined) patch.sectors = Array.isArray(sectors) && sectors.length ? sectors : null;
   try {
-    await axios.patch(`${SB_URL}/rest/v1/sources?id=eq.${req.params.id}`, { active }, { headers: sbHeaders });
+    await axios.patch(`${SB_URL}/rest/v1/sources?id=eq.${req.params.id}`, patch, { headers: sbHeaders });
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: 'No se pudo actualizar' }); }
 });
@@ -765,8 +768,20 @@ app.delete('/api/sources/:id', async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'No se pudo borrar' }); }
 });
 
+// Marcas de referencia por categoría, para reforzar la búsqueda de FASE 1 con nombres
+// concretos del sector (el buscador rinde mejor con nombres propios que con términos genéricos).
+const SECTOR_BRANDS = {
+  streaming: ['Netflix', 'Disney+', 'Max', 'Prime Video', 'Apple TV+', 'Movistar Plus+', 'DAZN', 'SkyShowtime'],
+  fast: ['Pluto TV', 'Tubi', 'Roku Channel', 'Samsung TV Plus', 'LG Channels', 'Rakuten TV', 'LoveTV Channels'],
+  operadores: ['Movistar', 'Orange TV', 'Vodafone TV', 'Telefónica', 'DIGI', 'MásMóvil', 'Yoigo', 'Jazztel', 'MEO', 'NOS'],
+  contenido: ['Netflix', 'HBO', 'Banijay', 'Mediaset', 'Atresmedia', 'RTVE'],
+  adtech: ['The Trade Desk', 'LG Ads', 'VIZIO', 'Samsung Ads', 'Amazon DSP', 'FreeWheel'],
+  partnerships: ['Netflix', 'Warner Bros Discovery', 'Comcast', 'Skydance', 'Banijay', 'NBCUniversal']
+};
+const DEFAULT_BRANDS = ['Netflix', 'Disney+', 'Max', 'Prime Video', 'SkyShowtime', 'Pluto TV'];
+
 app.post('/api/search-topics', async (req, res) => {
-  const { sector } = req.body;
+  const { sector, sectorId } = req.body;
 
   // ── Límite: una búsqueda por sector y día natural (se resetea a las 00:00 hora española) ──
   try {
@@ -792,18 +807,25 @@ app.post('/api/search-topics', async (req, res) => {
     }
   } catch(e) { console.error('Rate limit check error:', e.response?.data || e.message); }
 
-  // Cargar fuentes activas desde Supabase
+  // Cargar fuentes activas desde Supabase, filtradas por categoría cuando aplica.
+  // Una fuente sin "sectors" asignado se considera válida para CUALQUIER categoría (comportamiento por defecto).
   let sourcesList = '';
   let sourceDomains = [];
   try {
-    const srcs = await sbGet('sources', '?active=eq.true&select=name,url');
+    const filterQS = sectorId
+      ? `?active=eq.true&or=(sectors.is.null,sectors.cs.{${encodeURIComponent(sectorId)}})&select=name,url`
+      : '?active=eq.true&select=name,url';
+    const srcs = await sbGet('sources', filterQS);
     if (srcs && srcs.length) {
       sourcesList = srcs.map(s => s.name + (s.url ? ' ('+s.url+')' : '')).join(', ');
-      // Extraer dominios limpios para búsquedas site:
-      sourceDomains = srcs
-        .filter(s => s.url)
-        .map(s => s.url.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '').trim())
-        .filter(Boolean);
+      // Extraer dominios limpios para búsquedas site: (sin límite de 8; excluimos linkedin.com,
+      // que son perfiles de analistas, no medios con artículos indexables por site:)
+      sourceDomains = [...new Set(
+        srcs
+          .filter(s => s.url)
+          .map(s => s.url.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '').trim())
+          .filter(Boolean)
+      )].filter(d => !d.includes('linkedin.com'));
     }
   } catch(e) { console.error('Sources load error:', e.message); }
 
@@ -813,15 +835,27 @@ app.post('/api/search-topics', async (req, res) => {
     'Content-Type': 'application/json'
   };
   const now = new Date().toISOString();
-  const siteQueries = sourceDomains.length
-    ? sourceDomains.slice(0, 8).map(d => 'site:' + d).join(' OR ')
-    : '';
+
+  // Trocea los dominios en grupos (una cadena "site:a OR site:b..." demasiado larga
+  // pierde eficacia en un buscador real). Cada grupo es una búsqueda site: independiente.
+  const DOMAIN_CHUNK_SIZE = 10;
+  const domainChunks = [];
+  for (let i = 0; i < sourceDomains.length; i += DOMAIN_CHUNK_SIZE) {
+    domainChunks.push(sourceDomains.slice(i, i + DOMAIN_CHUNK_SIZE));
+  }
+  const siteQueryGroups = domainChunks.map(chunk => chunk.map(d => 'site:' + d).join(' OR '));
+  const brandList = (sectorId && SECTOR_BRANDS[sectorId]) || DEFAULT_BRANDS;
+
   const sourcesLine = sourcesList ? `Fuentes prioritarias del usuario: ${sourcesList}.` : '';
-  const strategyBlock = siteQueries
+  const strategyBlock = siteQueryGroups.length
     ? `ESTRATEGIA DE BÚSQUEDA (en dos fases):
-FASE 1 (prioritaria): Busca PRIMERO dentro de las fuentes del usuario usando el operador site:. Por ejemplo: "${sector} (${siteQueries})" y variantes con nombres concretos (Netflix, Disney, etc.). Empieza siempre por estas fuentes de confianza.
-FASE 2 (complemento): Si te queda margen, complementa con una búsqueda web general sobre "${sector}" para captar noticias de otras fuentes.`
-    : `Busca en la web noticias recientes sobre "${sector}".`;
+FASE 1 (prioritaria): Busca PRIMERO dentro de las fuentes del usuario, usando el operador site:. Tienes ${siteQueryGroups.length} grupo(s) de dominios; lanza UNA búsqueda por cada grupo (no los mezcles todos en una sola query):
+${siteQueryGroups.map((g, i) => `  - Búsqueda ${i + 1}: "${sector} (${g})"`).join('\n')}
+También prueba variantes con nombres concretos de marcas propias de esta categoría (${brandList.join(', ')}) combinadas con estos dominios cuando aporte.
+FASE 2 (complemento): Si te queda margen de búsquedas, complementa con una búsqueda web general sobre "${sector}" (prueba también combinando con nombres como ${brandList.slice(0, 3).join(', ')}) para captar noticias de otras fuentes no listadas.`
+    : `Busca en la web noticias recientes sobre "${sector}" (prueba también combinando con nombres como ${brandList.slice(0, 3).join(', ')}).`;
+  // Presupuesto de búsquedas: una por grupo de dominios (FASE 1) + margen para FASE 2 y variantes de marca
+  const webSearchMaxUses = Math.min(10, Math.max(4, siteQueryGroups.length + 3));
   const userPrompt = `Busca las noticias más relevantes y recientes (últimos 7 días) sobre: ${sector}.
 Fecha y hora actual de referencia: ${now}.
 ${sourcesLine}
@@ -846,7 +880,7 @@ REGLA DE FORMATO CRÍTICA: NO expliques tu razonamiento ni escribas análisis en
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: 'claude-sonnet-4-6',
       max_tokens: 2500,
-      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4 }],
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: webSearchMaxUses }],
       system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas noticias REALES y recientes con enlaces verificados. Empiezas SIEMPRE buscando dentro de las fuentes prioritarias del usuario (con site:) y luego complementas con búsqueda general. Devuelves hasta 8, ordenadas por relevancia, priorizando España/Portugal pero incluyendo globales relevantes. Nunca inventas URLs. FORMATO OBLIGATORIO: tu respuesta final debe ser ÚNICAMENTE un array JSON válido, empezando por [ y terminando por ]. NUNCA escribas tu razonamiento, análisis ni comentarios en la respuesta; todo ese trabajo hazlo internamente y entrega solo el JSON.',
       messages: [{ role: 'user', content: userPrompt }]
     }, { headers, timeout: 57000 });
