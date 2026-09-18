@@ -394,7 +394,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="cost-amount" id="costAmount">$0.00</div>
         <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
       </div>
-      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v3.3 · 17 sep 2026</span></div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v3.4 · 18 sep 2026</span></div>
     </div>
   </div>
   <div class="tab-view active" id="tab-discover">
@@ -1010,7 +1010,9 @@ async function fetchTopics(){
     if(data.error==='rate_limited'){
       document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text"><b>Ya has buscado hoy en esta categoría</b><br><br>'+data.detail+'<br><br><span style="font-size:11px;color:var(--muted2)">Última búsqueda: '+fmtDate(data.lastSearch)+'</span></div></div>';
     }else if(data.empty && data.reason==='all_old'){
-      document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text"><b>Sin novedades de esta semana</b><br><br>Se encontraron noticias, pero todas tenían más de 7 días. Para LinkedIn no interesa contenido antiguo. Prueba otra temática o vuelve más tarde.</div></div>';
+      const disc=Array.isArray(data.debugDiscarded)?data.debugDiscarded:[];
+      const discHtml=disc.length?('<details style="margin-top:14px;text-align:left;font-size:11.5px;color:var(--muted2)"><summary style="cursor:pointer;color:var(--muted)">Ver qué encontró y descartó (diagnóstico) · '+disc.length+'</summary><div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">'+disc.map(d=>'<div style="padding:6px 8px;border:1px solid var(--border);border-radius:6px"><b>'+(d.title||'(sin título)')+'</b><br>Fecha detectada: '+(d.published_date||'—')+(d.published?(' · "'+d.published+'"'):'')+'</div>').join('')+'</div></details>'):'';
+      document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text"><b>Sin novedades de esta semana</b><br><br>Se encontraron noticias, pero todas tenían más de 7 días. Para LinkedIn no interesa contenido antiguo. Prueba otra temática o vuelve más tarde.'+discHtml+'</div></div>';
     }else if(data.empty && (data.reason==='timeout'||data.reason==='error')){
       const c=document.getElementById('topicsContainer');
       c.innerHTML='<div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-text"><b>La búsqueda no respondió a tiempo</b><br><br>No es que no haya noticias — la búsqueda web se ha demorado o ha fallado. Pulsa "Actualizar" para reintentar (no consume tu límite de 24h).<br><br><span style="font-size:11px;color:var(--muted2)">'+(data.detail||data.reason)+'</span></div></div>';
