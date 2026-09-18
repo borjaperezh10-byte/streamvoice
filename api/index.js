@@ -917,12 +917,17 @@ REGLA DE FORMATO CRÍTICA: NO expliques tu razonamiento ni escribas análisis en
         await persistSearch(sector, mapped, now);
         return res.json({ topics: mapped, searchedAt: now, source: 'web' });
       }
-      // Todo lo encontrado era viejo → sin novedades frescas
-      return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: 'all_old' });
+      // Todo lo encontrado era viejo → sin novedades frescas.
+      // DIAGNÓSTICO TEMPORAL: devolvemos también lo que la IA encontró y descartó (título + fecha
+      // que detectó), para poder ver en la propia app si el problema es de fechas mal detectadas
+      // o de contenido genuinamente antiguo. Quitar este bloque cuando quede claro el motivo.
+      const discarded = topics.slice(0, 10).map(t => ({ title: t.title, published: t.published, published_date: t.published_date || null }));
+      console.error('all_old — descartadas:', JSON.stringify(discarded));
+      return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: 'all_old', debugDiscarded: discarded });
     }
     // La búsqueda respondió pero no pudimos extraer temas
     console.error('No topics parsed. Raw text (first 500):', text.slice(0, 500));
-    return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: 'no_parse' });
+    return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: 'no_parse', debugRawText: text.slice(0, 800) });
   } catch (webErr) {
     const detail = webErr.response?.data?.error?.message || webErr.message;
     console.error('Web search failed:', detail);
