@@ -25,6 +25,10 @@ function verifyTotp(code) {
 // ─── MODELO DE IA ─────────────────────────────────────────────────────────────
 // Un único sitio para cambiar el modelo de Claude que usa toda la app.
 const CLAUDE_MODEL = 'claude-sonnet-5-5';
+// Claude Sonnet 5.5 "piensa" antes de responder por defecto, y ese razonamiento gasta del mismo
+// límite (max_tokens) que el texto: con límites ajustados (un post) se quedaba sin texto.
+// "between_tools" desactiva el razonamiento previo (como el modelo anterior).
+const CLAUDE_THINKING = { type: 'between_tools' };
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -706,6 +710,7 @@ Solo el texto del post, listo para copiar.`
     const body = {
       model: CLAUDE_MODEL,
       max_tokens: finalMaxTok,
+      thinking: CLAUDE_THINKING,
       system: `Eres el ghostwriter de Borja Pérez Herraiz, experto independiente en el sector audiovisual con +15 años en distribución multiplataforma, OTT, FAST, SVOD y partnerships. Escribes posts de LinkedIn al estilo de un analista senior de la industria: arranque con dato o giro, cuerpo con cifras y nombres reales, lectura estratégica de fondo, y cierre que eleva (pregunta, aforismo o gancho). Directo, con criterio propio, cero relleno motivacional. Escribes como observador independiente del sector, nunca en nombre de una empresa concreta. RESPETA SIEMPRE el límite de longitud que se te indica.`,
       messages
     };
@@ -724,6 +729,10 @@ Solo el texto del post, listo para copiar.`
     });
 
     let text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
+    if (!text.trim()) {
+      console.error('Generate: respuesta sin texto. stop_reason=', response.data.stop_reason, 'usage=', JSON.stringify(response.data.usage || {}));
+      return res.status(502).json({ error: 'La IA no devolvió texto', detail: 'Respuesta vacía (' + (response.data.stop_reason || 'sin motivo') + '). Vuelve a intentarlo.' });
+    }
     // El enlace de la noticia YA NO se mete dentro del texto (un enlace en el cuerpo reduce
     // mucho el alcance). Se devuelve aparte para ofrecerlo como primer comentario al publicar.
     let articleUrl = '';
@@ -741,6 +750,7 @@ async function askClaude(prompt, maxTokens = 700, timeout = 25000) {
   const r = await axios.post('https://api.anthropic.com/v1/messages', {
     model: CLAUDE_MODEL,
     max_tokens: maxTokens,
+    thinking: CLAUDE_THINKING,
     system: 'Ayudas a Borja Pérez Herraiz, experto independiente del sector audiovisual (distribución, OTT, FAST, SVOD, partnerships), a escribir en LinkedIn. Nunca escribes en nombre de ninguna empresa ni mencionas la empresa en la que trabaja (en particular, nunca "Paramount"). Respondes SOLO con el JSON pedido.',
     messages: [{ role: 'user', content: prompt }]
   }, {
@@ -1352,6 +1362,7 @@ REGLA DE FORMATO CRÍTICA: NO expliques tu razonamiento. Tu respuesta debe EMPEZ
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
       model: CLAUDE_MODEL,
       max_tokens: 3000,
+      thinking: CLAUDE_THINKING,
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: webSearchMaxUses }],
       system: 'Eres un editor de contenido del sector audiovisual y streaming. Seleccionas noticias REALES y recientes para que un experto independiente opine en LinkedIn. Usas primero las noticias de las fuentes del usuario (leídas de sus RSS) y solo recurres a la búsqueda web si con ellas no hay suficiente. Nunca inventas URLs ni fechas. FORMATO OBLIGATORIO: tu respuesta final debe ser ÚNICAMENTE un array JSON válido, empezando por [ y terminando por ]. Nunca escribas tu razonamiento en la respuesta.',
       messages: [{ role: 'user', content: userPrompt }]
