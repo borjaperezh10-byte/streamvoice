@@ -436,7 +436,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="cost-amount" id="costAmount">$0.00</div>
         <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
       </div>
-      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v5.0 · 5 oct 2026</span></div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v5.1 · 5 oct 2026</span></div>
     </div>
   </div>
   <div class="tab-view active" id="tab-discover">
@@ -1223,7 +1223,15 @@ async function generateDraft(idx,e){
   showLoading('Redactando con tu voz...');
   try{
     const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,profile:document.getElementById('profileInput').value,tones:selectedTones,length:LEN[currentLength].k,lang:currentLang})});
-    const d=await r.json();currentDraftRaw=d.text||'Error.';currentArticleUrl=d.articleUrl||topic.url||'';lastSourceWasIdea=false;
+    const d=await r.json();
+    if(!r.ok||!d.text){
+      // No se pisa el borrador anterior: se muestra el motivo del fallo
+      da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon">⚠️</div><div class="draft-placeholder-text">No se pudo generar el post. '+((d&&(d.detail||d.error))||('Error '+r.status))+'</div></div>';
+      document.getElementById('charCount').textContent='';
+      const st0=document.getElementById('charStatus');st0.textContent='⚠️ Error';st0.style.color='var(--red)';
+      hideLoading();generating=false;return;
+    }
+    currentDraftRaw=d.text;currentArticleUrl=d.articleUrl||topic.url||'';lastSourceWasIdea=false;
     renderDraftArea(currentDraftRaw);
     document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
     const st=document.getElementById('charStatus');st.textContent='✓ Listo';st.style.color='var(--green)';
@@ -1246,8 +1254,9 @@ async function generateFromCustom(){
   showLoading(url?'Leyendo tu enlace y redactando...':'Redactando desde tu texto...');
   try{
     const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile:document.getElementById('profileInput').value,tones:selectedTones,length:LEN[currentLength].k,lang:currentLang,customSource:{url,text}})});
-    const d=await r.json();currentDraftRaw=d.text||'Error.';currentArticleUrl=d.articleUrl||url||'';
-    if(d.error){da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon">⚠️</div><div class="draft-placeholder-text">Error: '+(d.detail||d.error)+'</div></div>';}
+    const d=await r.json();
+    if(!d.error&&d.text){currentDraftRaw=d.text;currentArticleUrl=d.articleUrl||url||'';}
+    if(d.error||!d.text){da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon">⚠️</div><div class="draft-placeholder-text">Error: '+(d.detail||d.error)+'</div></div>';}
     else{
       renderDraftArea(currentDraftRaw);
       document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
