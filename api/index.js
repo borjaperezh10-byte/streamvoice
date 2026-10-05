@@ -507,67 +507,6 @@ app.get('/api/cron/publish-due', async (req, res) => {
   }
 });
 
-// ─── METRICS ──────────────────────────────────────────────────────────────────
-
-app.get('/api/metrics/:postId', requireAuth, async (req, res) => {
-  const post = store.posts.find(p => p.id === req.params.postId);
-  if (!post || !post.linkedinId) return res.status(404).json({ error: 'Post not found or not published' });
-
-  try {
-    // LinkedIn Statistics API
-    const statsRes = await axios.get(
-      `https://api.linkedin.com/v2/socialMetadata/${encodeURIComponent(post.linkedinId)}`,
-      { headers: { Authorization: `Bearer ${req.linkedinSession.accessToken}` } }
-    );
-
-    const data = statsRes.data;
-    const metrics = {
-      postId: post.id,
-      linkedinId: post.linkedinId,
-      impressions: data.totalShareStatistics?.impressionCount || 0,
-      reactions: data.totalShareStatistics?.likeCount || 0,
-      comments: data.totalShareStatistics?.commentCount || 0,
-      shares: data.totalShareStatistics?.shareCount || 0,
-      clicks: data.totalShareStatistics?.clickCount || 0,
-      engagementRate: data.totalShareStatistics?.engagement || 0,
-      fetchedAt: new Date().toISOString()
-    };
-
-    // Cache metrics
-    const existing = store.metrics.findIndex(m => m.postId === post.id);
-    if (existing >= 0) store.metrics[existing] = metrics;
-    else store.metrics.push(metrics);
-
-    res.json(metrics);
-  } catch (err) {
-    // Return cached if available
-    const cached = store.metrics.find(m => m.postId === post.id);
-    if (cached) return res.json({ ...cached, fromCache: true });
-    res.status(500).json({ error: 'Failed to fetch metrics', detail: err.response?.data });
-  }
-});
-
-app.get('/api/metrics', requireAuth, (req, res) => {
-  const enriched = store.posts.map(post => {
-    const metrics = store.metrics.find(m => m.postId === post.id) || {};
-    return { ...post, metrics };
-  });
-  res.json(enriched);
-});
-
-// ─── POSTS STORE ──────────────────────────────────────────────────────────────
-
-app.get('/api/posts', requireAuth, (req, res) => {
-  res.json(store.posts.sort((a, b) => new Date(b.createdAt || b.publishedAt || b.scheduledAt) - new Date(a.createdAt || a.publishedAt || a.scheduledAt)));
-});
-
-app.delete('/api/posts/:id', requireAuth, (req, res) => {
-  const idx = store.posts.findIndex(p => p.id === req.params.id);
-  if (idx < 0) return res.status(404).json({ error: 'Not found' });
-  store.posts.splice(idx, 1);
-  res.json({ ok: true });
-});
-
 // ─── AI GENERATION (proxy to Anthropic) ──────────────────────────────────────
 
 app.post('/api/generate', async (req, res) => {
@@ -689,7 +628,7 @@ ESTILO OBLIGATORIO (imita EXACTAMENTE este patrón, basado en posts de referenci
 
 5. ${emojiRule}
 
-6. Termina con 4-6 hashtags relevantes y específicos (mezcla sector + nombres propios del tema), en una línea aparte. Si el tono es muy sobrio, pueden ser menos.
+6. Termina con 0-3 hashtags muy específicos en una línea aparte (nunca más de 3; si el tono es sobrio, mejor ninguno).
 
 IMPORTANTE sobre la voz: escribes como analista INDEPENDIENTE del sector. NO hables en nombre de ninguna empresa concreta ni des a entender que representas a una compañía. Comenta la actualidad con criterio propio de experto, como un observador de la industria. NUNCA menciones la empresa en la que trabaja el autor (en particular, nunca escribas "Paramount") ni frases del tipo "en mi empresa", "nosotros en...", "hemos lanzado". La experiencia se cuenta en primera persona como trayectoria profesional ("en los acuerdos de distribución que he negociado..."), nunca como portavoz de una compañía.
 
@@ -872,8 +811,8 @@ app.get('/api/tips', requireAuth, (req, res) => {
     },
     {
       icon: '🏷️',
-      title: 'Hashtags de nicho > hashtags masivos',
-      body: '#Streaming tiene millones de posts. Combina con #FAST #CTV #SVOD #ContentDistribution #PayTV. El algoritmo de LinkedIn penaliza más de 5 hashtags por post.',
+      title: 'Hashtags: máximo 3 y de nicho',
+      body: '#Streaming tiene millones de posts. Usa como máximo 3 hashtags y que sean de nicho (por ejemplo #FAST #CTV #ContentDistribution). Con más de 3 el rendimiento cae, y el algoritmo ya identifica el tema por las palabras clave del texto.',
       priority: 'medium'
     },
     {
@@ -1412,10 +1351,7 @@ REGLA DE FORMATO CRÍTICA: NO expliques tu razonamiento. Tu respuesta debe EMPEZ
         return res.json({ topics: mapped, searchedAt: now, source: 'web', stats });
       }
       // Todo lo encontrado era viejo → sin novedades frescas.
-      // DIAGNÓSTICO: devolvemos también lo que la IA encontró y descartó (título + fecha detectada).
-      const discarded = topics.slice(0, 10).map(t => ({ title: t.title, published: t.published, published_date: t.published_date || null }));
-      console.error('all_old — descartadas:', JSON.stringify(discarded));
-      return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: 'all_old', debugDiscarded: discarded, stats });
+      return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: 'all_old', stats });
     }
     if (topics && topics.length === 0) {
       // La IA respondió correctamente pero no encontró nada relevante

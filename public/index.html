@@ -360,10 +360,10 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
       <div id="linkFieldWrap" style="display:none">
         <input type="text" id="publishLinkInput" class="modal-input" style="text-align:left;letter-spacing:0;margin-top:6px" placeholder="https://enlace-del-articulo.com">
         <div class="link-place">
-          <label><input type="radio" name="linkPlace" value="comment" checked> 💬 En el primer comentario (recomendado)</label>
+          <label><input type="radio" name="linkPlace" value="comment" checked> 💬 En el primer comentario</label>
           <label><input type="radio" name="linkPlace" value="post"> 📝 Dentro del post (reduce el alcance)</label>
         </div>
-        <div class="pub-hint">ℹ️ Si LinkedIn no permite añadir el comentario automáticamente, el post se publica igual y te dejamos el enlace copiado para pegarlo tú.</div>
+        <div class="pub-hint">ℹ️ Lo mejor para el alcance es no poner enlace y citar la noticia por su nombre. Si lo añades, el primer comentario penaliza menos que dentro del post. Si LinkedIn no permite comentar automáticamente, el post se publica igual y te dejamos el enlace copiado.</div>
       </div>
     </div>
 
@@ -436,7 +436,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="cost-amount" id="costAmount">$0.00</div>
         <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
       </div>
-      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v5.1 · 5 oct 2026</span></div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v5.2 · 5 oct 2026</span></div>
     </div>
   </div>
   <div class="tab-view active" id="tab-discover">
@@ -482,9 +482,9 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
   <div class="tab-view" id="tab-tips">
     <div class="sec-label" style="margin-bottom:.75rem">📈 Guía de buenas prácticas en LinkedIn (2026)</div>
     <div class="guide-updated">
-      <span>🗓️ <b>Última actualización:</b> 18 de agosto de 2026</span>
+      <span>🗓️ <b>Última actualización:</b> 5 de octubre de 2026</span>
       <span style="opacity:.6">·</span>
-      <span>🔄 Las tendencias y el algoritmo de LinkedIn cambian: conviene <b>revisar esta guía cada 3-4 meses</b> (próxima revisión recomendada: ~diciembre 2026).</span>
+      <span>🔄 Las tendencias y el algoritmo de LinkedIn cambian: conviene <b>revisar esta guía cada 3-4 meses</b> (próxima revisión recomendada: ~febrero 2027).</span>
     </div>
     <div id="guideContainer"></div>
     <div class="sec-label" style="margin:1.5rem 0 .75rem">💡 Tips personalizados</div>
@@ -1128,9 +1128,7 @@ async function fetchTopics(){
     if(data.error==='rate_limited'){
       document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><div class="empty-text"><b>Ya has buscado hoy en esta categoría</b><br><br>'+data.detail+'<br><br><span style="font-size:11px;color:var(--muted2)">Última búsqueda: '+fmtDate(data.lastSearch)+'</span></div></div>';
     }else if(data.empty && data.reason==='all_old'){
-      const disc=Array.isArray(data.debugDiscarded)?data.debugDiscarded:[];
-      const discHtml=disc.length?('<details style="margin-top:14px;text-align:left;font-size:11.5px;color:var(--muted2)"><summary style="cursor:pointer;color:var(--muted)">Ver qué encontró y descartó (diagnóstico) · '+disc.length+'</summary><div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">'+disc.map(d=>'<div style="padding:6px 8px;border:1px solid var(--border);border-radius:6px"><b>'+(d.title||'(sin título)')+'</b><br>Fecha detectada: '+(d.published_date||'—')+(d.published?(' · "'+d.published+'"'):'')+'</div>').join('')+'</div></details>'):'';
-      document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text"><b>Sin novedades de esta semana</b><br><br>Se encontraron noticias, pero todas tenían más de 7 días. Para LinkedIn no interesa contenido antiguo. Prueba otra temática o vuelve más tarde.'+discHtml+'</div></div>';
+      document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text"><b>Sin novedades de esta semana</b><br><br>Se encontraron noticias, pero todas tenían más de 7 días. Para LinkedIn no interesa contenido antiguo. Prueba otra temática o vuelve más tarde.</div></div>';
     }else if(data.empty && data.reason==='none_relevant'){
       document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text"><b>Nada relevante esta semana en esta categoría</b><br><br>Se revisaron tus fuentes'+(data.stats?(' ('+data.stats.rssItems+' noticias recientes de '+data.stats.rssFeeds+' RSS'+(data.stats.webSearches?(' + '+data.stats.webSearches+' búsquedas web'):'')+')'):'')+', pero ninguna tenía lectura de negocio para esta categoría. Como no hubo resultados, no se ha gastado tu búsqueda de hoy: puedes probar otra categoría o volver más tarde.</div></div>';
     }else if(data.empty && (data.reason==='timeout'||data.reason==='error')){
@@ -1480,14 +1478,6 @@ async function deleteDraftHistory(id){
   if(!confirm('¿Borrar este borrador del historial?'))return;
   try{await fetch('/api/draft-history/'+id,{method:'DELETE'});loadDraftHistory();}catch(e){}
 }
-async function loadMetrics(){
-  if(!isConnected){document.getElementById('metricsContainer').innerHTML='';return;}
-  document.getElementById('metricsBanner').innerHTML='<b>Métricas de tus posts</b> publicados desde StreamVoice.';
-  try{const r=await fetch('/api/metrics');const posts=await r.json();const c=document.getElementById('metricsContainer');
-    if(!posts.length){c.innerHTML='<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">Aún no has publicado posts.</div></div>';return;}
-    c.innerHTML=posts.map(p=>'<div class="metric-card"><div class="metric-title">'+(p.body||'').slice(0,80)+'...</div><div class="metric-grid"><div class="metric-stat"><div class="metric-val">'+(p.metrics?.impressions||0)+'</div><div class="metric-label">Impres.</div></div><div class="metric-stat"><div class="metric-val">'+(p.metrics?.reactions||0)+'</div><div class="metric-label">Reacc.</div></div><div class="metric-stat"><div class="metric-val">'+(p.metrics?.comments||0)+'</div><div class="metric-label">Coment.</div></div><div class="metric-stat"><div class="metric-val">'+(p.metrics?.shares||0)+'</div><div class="metric-label">Compart.</div></div></div></div>').join('');
-  }catch(e){}
-}
 // ── Datos de franjas horarias (España, 2026). Valor = % de impacto relativo (0-100) ──
 // Días: L,M,X,J,V (0-4). Horas: de 7:30 a 19:00 en bloques.
 const SLOT_HOURS=['7:30–8:30','8:30–9:30','9:30–11:00','11:00–12:00','12:00–13:00','13:00–14:00','14:00–16:00','16:00–17:00','17:00–18:00','18:00–19:00'];
@@ -1529,8 +1519,8 @@ function renderGuide(){
     {icon:'🎯',tag:'do',tagtxt:'HAZLO',title:'Tono: útil, no “inteligente”',
      body:'LinkedIn premia ser útil, no sonar listo. Comparte una opinión clara y oportuna sobre las tendencias del sector, no resúmenes de noticias. Tu ventaja es tu experiencia: aporta la lectura de fondo que solo alguien de dentro puede dar. Una postura ligeramente a contracorriente (pero profesional) genera debate.',
      src:'Rosica · Digitally Bugged · Postiv',url:'https://www.rosica.com/2026/02/23/linkedin-thought-leadership-tips-for-2026/'},
-    {icon:'📏',tag:'do',tagtxt:'HAZLO',title:'Longitud: apunta a 1.200–1.600 caracteres',
-     body:'El contenido más largo y sustancioso rinde mejor porque genera dwell time (tiempo de lectura), señal de calidad para el algoritmo. Los posts de +2.000 caracteres logran ~2,56% de engagement frente a ~1,53% de los muy cortos. Los de menos de 500 penalizan (se interpretan como bajo esfuerzo). Para empezar, la franja 1.200–1.600 es ideal: desarrollas una idea sin abrumar.',
+    {icon:'📏',tag:'do',tagtxt:'HAZLO',title:'Longitud: apunta a 1.200–2.000 caracteres',
+     body:'El contenido más largo y sustancioso rinde mejor porque genera dwell time (tiempo de lectura), señal de calidad para el algoritmo. Los posts de +2.000 caracteres logran ~2,56% de engagement frente a ~1,53% de los muy cortos, y un análisis de AuthoredUp (372.126 posts) sitúa los de 1.301–2.500 caracteres ~27% por encima de los de menos de 400. El rendimiento se estabiliza hacia los 2.000 y empeora pasados ~2.500. Los de menos de 500 penalizan (se interpretan como bajo esfuerzo). La franja 1.200–2.000 es ideal: desarrollas una idea sin abrumar.',
      src:'Taplio (millones de posts) · AuthoredUp · Buffer',url:'https://taplio.com/blog/how-long-should-a-linkedin-post-be'},
     {icon:'📅',tag:'do',tagtxt:'HAZLO',title:'Días y franjas (España)',
      body:'Martes, miércoles y jueves son los días fuertes; lunes y viernes flojean. Las mejores franjas: 7:30–8:30, 12:00–13:00 y sobre todo 9:30–12:00. Para medios/software, la audiencia consulta el feed por la mañana. Clave: el algoritmo evalúa el rendimiento en los primeros 60-90 min, así que publica cuando tu red esté conectada.',
@@ -1540,11 +1530,11 @@ function renderGuide(){
      body:'Los posts con emojis obtienen de media un 20-30% más de engagement. Funcionan sobre todo para estructurar (separar bloques, marcar el gancho). El límite: no sobrecargar ni caer en lo informal si tu perfil es de analista. 1 en el hook y alguno para separar ideas es suficiente.',
      src:'Word Counter Tool',url:'https://www.wordcountertool.net/blog/ideal-linkedin-post-length'},
     {icon:'#️⃣',tag:'dont',tagtxt:'MATIZ',title:'Hashtags: casi irrelevantes ya',
-     body:'En 2026 el algoritmo distribuye por modelado de temas y comportamiento, no por hashtags. Lo que de verdad enseña al algoritmo de qué hablas son las palabras clave del propio texto. Usa 3-5 hashtags máximo, y asegúrate de que el cuerpo use el vocabulario del sector (streaming, OTT, distribución, audiencias). Donde sí ayudan: eventos concretos (hasta +25%).',
+     body:'En 2026 el algoritmo distribuye por modelado de temas y comportamiento, no por hashtags. Lo que de verdad enseña al algoritmo de qué hablas son las palabras clave del propio texto. Usa 3 hashtags como máximo (en el primer trimestre de 2026, los posts con más de 3 rindieron un 71% peor que los que no llevaban ninguno) y asegúrate de que el cuerpo use el vocabulario del sector (streaming, OTT, distribución, audiencias). Donde sí ayudan: eventos concretos (hasta +25%).',
      src:'ConnectSafely · van der Blom (1,3M posts)',url:'https://melaniegoodmanlinkedinconsultant.substack.com/p/linkedin-algorithm-2026-reach-topic-authority'},
-    {icon:'🔗',tag:'dont',tagtxt:'EVÍTALO',title:'Enlace externo en el cuerpo: penaliza',
-     body:'Un enlace externo en el cuerpo reduce el alcance mediano un 18,8% (estudio de 1,3M posts), y la penalización se ha agravado en 2026. El viejo truco de “link en el primer comentario” ya no está claro que funcione. Mejor: lanza tu opinión sin enlace y acompaña con una imagen. Imagen + texto largo es la mejor combinación (2,77% engagement vs 1,98% de solo texto).',
-     src:'van der Blom · Digital Applied · Taplio',url:'https://www.digitalapplied.com/blog/linkedin-algorithm-2026-engagement-strategy-guide'},
+    {icon:'🔗',tag:'dont',tagtxt:'EVÍTALO',title:'Enlace externo: ni en el cuerpo ni en el primer comentario',
+     body:'Un enlace externo en el cuerpo del post penaliza el alcance. Las estimaciones van del −18,8% (estudio de van der Blom con 1,3M de posts) hasta un ~−60% según otros análisis: no hay consenso en la cifra, pero sí en la dirección. El truco de “link en el primer comentario” tampoco es seguro: según fuentes de 2026 se penaliza desde principios de año (hasta −80% de visibilidad en comentarios con enlace) y LinkedIn detecta posts diseñados para redirigir al comentario. Mejor: lanza tu opinión sin enlace, cita la noticia por su nombre y acompaña con una imagen. Imagen + texto largo es la mejor combinación (2,77% engagement vs 1,98% de solo texto). Si aun así necesitas el enlace, el comentario penaliza menos que el cuerpo.',
+     src:'van der Blom · Expandi · We Change Minds · Gromming',url:'https://expandi.io/blog/linkedin-algorithm/'},
     {icon:'❓',tag:'dont',tagtxt:'MATIZ',title:'Cerrar con pregunta: con cuidado',
      body:'La pregunta genuina va bien, pero el “cebo de engagement” (“escribe 1 si estás de acuerdo”) se penaliza. Y ojo: con poca audiencia, el problema no suele ser la pregunta, sino que pocos ven el post. En vez de “¿qué opináis?” genérico, cierra con una pregunta específica de experiencia, o con una afirmación con opinión fuerte que invite a discrepar. Comenta en posts de otros 15 min antes de publicar: sube tu alcance inicial.',
      src:'Digital Applied · ConnectSafely · Sprout Social',url:'https://sproutsocial.com/insights/linkedin-algorithm/'},
