@@ -71,6 +71,8 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .rss-detect-btn{margin-top:10px;background:transparent;color:var(--accent);border:1px solid var(--accent-border);border-radius:8px;padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:12.5px;font-weight:600;cursor:pointer}
 .rss-detect-btn:disabled{opacity:.6;cursor:wait}
 .rss-detect-msg{font-size:11.5px;color:var(--muted);margin-top:6px}
+.emp-badge{font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:20px;background:rgba(230,126,34,.12);border:1px solid rgba(230,126,34,.4);color:#e67e22;white-space:nowrap}
+.emp-note{font-size:11.5px;color:#e67e22;background:rgba(230,126,34,.07);border:1px solid rgba(230,126,34,.25);border-radius:7px;padding:6px 9px;margin:6px 0}
 .topic-origin{font-size:10.5px;color:var(--muted2);padding:2px 7px;border-radius:5px;border:1px solid var(--border);white-space:nowrap}
 .src-del:hover{color:var(--red)}
 .source-toggle{width:38px;height:21px;border-radius:11px;border:none;cursor:pointer;position:relative;flex-shrink:0;transition:background .2s}
@@ -402,7 +404,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="cost-amount" id="costAmount">$0.00</div>
         <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
       </div>
-      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v4.1 · 5 oct 2026</span></div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v4.2 · 5 oct 2026</span></div>
     </div>
   </div>
   <div class="tab-view active" id="tab-discover">
@@ -1085,6 +1087,21 @@ async function fetchTopics(){
   }
   hideLoading();btn.disabled=false;lbl.innerHTML='🔄 Actualizar';
 }
+// ── Noticias que afectan a la empresa del autor ──
+// Se marcan con un aviso (no se ocultan): algunas se pueden comentar y otras conviene evitarlas.
+const EMPLOYER_BRANDS=[
+  {l:'Paramount',re:/\bparamount\b/i},
+  {l:'Skydance',re:/\bskydance\b/i},
+  {l:'Warner Bros. Discovery',re:/\bwarner\s*bros\b|\bwarner\s*bros\.?\s*discovery\b|\bwbd\b|\bwarnermedia\b|\bwarner\s+discovery\b/i},
+  {l:'HBO / HBO Max',re:/\bhbo\b/i},
+  {l:'CBS',re:/\bcbs\b/i},
+  {l:'Pluto TV',re:/\bpluto\s*tv\b/i},
+  {l:'SkyShowtime',re:/\bsky\s*showtime\b/i}
+];
+function employerHits(t){
+  const txt=[t.title,t.why,t.angle,(t.tags||[]).join(' ')].join(' · ');
+  return EMPLOYER_BRANDS.filter(b=>b.re.test(txt)).map(b=>b.l);
+}
 function renderTopics(topics,searchedAt){
   const c=document.getElementById('topicsContainer');c.innerHTML='';
   if(searchedAt){const meta=document.createElement('div');meta.style.cssText='font-size:11px;color:var(--muted);margin-bottom:4px;display:flex;align-items:center;gap:6px';meta.innerHTML='<span style="color:var(--green)">●</span> Última búsqueda: '+fmtDate(searchedAt)+' · '+topics.length+' noticias (últimos 7 días)';c.appendChild(meta);}
@@ -1104,7 +1121,10 @@ function renderTopics(topics,searchedAt){
       const q=encodeURIComponent(t.title||'');
       link='<a href="https://www.google.com/search?q='+q+'" target="_blank" rel="noopener" class="topic-link topic-link-search" onclick="event.stopPropagation()">🔍 Buscar en Google</a>';
     }
-    card.innerHTML='<div class="topic-stripe"></div><div class="topic-header"><div class="topic-title">'+t.title+'</div><div style="display:flex;gap:5px;flex-shrink:0">'+scopeBadge+'<div class="ep '+ec+'">'+em[ec]+'</div></div></div><div class="topic-why">'+t.why+'</div><div class="topic-angle">💡 '+t.angle+'</div>'+((pub||link)?'<div class="topic-meta-row">'+pub+link+'</div>':'')+'<div class="topic-footer"><div style="flex:1"><div class="tags">'+(t.tags||[]).map(x=>'<span class="tag">'+x+'</span>').join('')+'</div><div class="eng-stats"><div class="platform-badge '+p.c+'">'+p.l+'</div>'+(t.eng_reactions?'<div class="eng-stat">❤️ '+t.eng_reactions+'</div>':'')+(t.eng_comments?'<div class="eng-stat">💬 '+t.eng_comments+'</div>':'')+'</div></div><button class="gen-btn" onclick="generateDraft('+i+',event)" title="Coste estimado: ~$0.01 por post generado">Generar →</button></div>';
+    const emp=employerHits(t);
+    const empBadge=emp.length?'<span class="emp-badge" title="Menciona: '+emp.join(', ')+'">⚠️ Tu empresa</span>':'';
+    const empNote=emp.length?'<div class="emp-note">⚠️ <b>Afecta a tu empresa</b> ('+emp.join(', ')+'). Valora si te conviene comentarla. Si generas el post, no nombrará a tu empresa ni hablará en su nombre.</div>':'';
+    card.innerHTML='<div class="topic-stripe"></div><div class="topic-header"><div class="topic-title">'+t.title+'</div><div style="display:flex;gap:5px;flex-shrink:0">'+empBadge+scopeBadge+'<div class="ep '+ec+'">'+em[ec]+'</div></div></div>'+empNote+'<div class="topic-why">'+t.why+'</div><div class="topic-angle">💡 '+t.angle+'</div>'+((pub||link)?'<div class="topic-meta-row">'+pub+link+'</div>':'')+'<div class="topic-footer"><div style="flex:1"><div class="tags">'+(t.tags||[]).map(x=>'<span class="tag">'+x+'</span>').join('')+'</div><div class="eng-stats"><div class="platform-badge '+p.c+'">'+p.l+'</div>'+(t.eng_reactions?'<div class="eng-stat">❤️ '+t.eng_reactions+'</div>':'')+(t.eng_comments?'<div class="eng-stat">💬 '+t.eng_comments+'</div>':'')+'</div></div><button class="gen-btn" onclick="generateDraft('+i+',event)" title="Coste estimado: ~$0.01 por post generado">Generar →</button></div>';
     card.onclick=e=>{if(e.target.tagName==='BUTTON'||e.target.tagName==='A')return;document.querySelectorAll('.topic-card').forEach(x=>x.classList.remove('selected'));card.classList.add('selected');};
     g.appendChild(card);
   });
@@ -1130,7 +1150,9 @@ function loadFromHistory(){
   renderTopics(allTopics,h.searched_at);
 }
 async function generateDraft(idx,e){
-  if(e)e.stopPropagation();const topic=allTopics[idx];if(!topic||generating)return;generating=true;lastTopicIdx=idx;
+  if(e)e.stopPropagation();const topic=allTopics[idx];if(!topic||generating)return;
+  if(e){const emp=employerHits(topic);if(emp.length&&!confirm('⚠️ Esta noticia afecta a tu empresa ('+emp.join(', ')+').\n\n¿Seguro que quieres generar un post sobre ella?'))return;}
+  generating=true;lastTopicIdx=idx;
   document.querySelectorAll('.topic-card').forEach((c,i)=>c.classList.toggle('selected',i===idx));
   const da=document.getElementById('draftArea');
   da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon"><span class="spinner" style="border-top-color:var(--accent);border-color:var(--border2);width:20px;height:20px"></span></div><div class="draft-placeholder-text" style="margin-top:8px">Generando...</div></div>';
