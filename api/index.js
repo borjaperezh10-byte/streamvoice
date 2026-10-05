@@ -3,6 +3,7 @@ const express = require('express');
 const axios = require('axios');
 const path = require('path');
 const { authenticator } = require('otplib');
+const crypto = require('crypto');
 
 // Tolerancia: acepta el código actual y el inmediatamente anterior/siguiente (±30s)
 // para evitar fallos por desfase de reloj entre el móvil y el servidor.
@@ -28,6 +29,60 @@ const CLAUDE_MODEL = 'claude-sonnet-5-5';
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '../public')));
+
+// ─── SESIÓN SEGURA (tras el código de Google Authenticator) ───────────────────
+// Antes, el código solo protegía la pantalla de entrada: las funciones /api respondían
+// a cualquiera que conociera la dirección. Ahora, al validar el código, el servidor
+// entrega una cookie de sesión firmada (HttpOnly: el navegador la envía solo y ningún
+// script puede leerla). Todas las /api la exigen, salvo estas excepciones:
+const SESSION_HOURS = 12;
+const PUBLIC_API = new Set([
+  '/api/access',          // donde se introduce el código
+  '/api/session',         // comprobar si la sesión sigue viva
+  '/api/auth/callback',   // vuelta de LinkedIn tras conectar la cuenta
+  '/api/cron/publish-due' // cron-job.org (tiene su propio token secreto)
+]);
+function sessionKey() {
+  // Clave derivada de secretos que ya existen en Vercel: no hace falta crear variables nuevas
+  const base = process.env.TOTP_SECRET || '';
+  return crypto.createHmac('sha256', base + '|' + (process.env.SUPABASE_SERVICE_KEY || '')).update('streamvoice-session-v1').digest();
+}
+function b64url(buf) { return Buffer.from(buf).toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_'); }
+function signSession(expMs) {
+  const payload = b64url(JSON.stringify({ exp: expMs }));
+  const sig = b64url(crypto.createHmac('sha256', sessionKey()).update(payload).digest());
+  return payload + '.' + sig;
+}
+function readCookie(req, name) {
+  const raw = req.headers.cookie || '';
+  for (const part of raw.split(';')) {
+    const i = part.indexOf('=');
+    if (i > -1 && part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return null;
+}
+function hasValidSession(req) {
+  if (!process.env.TOTP_SECRET) return true; // sin secreto configurado la app no tiene bloqueo (como antes)
+  const tok = readCookie(req, 'sv_session');
+  if (!tok || tok.indexOf('.') < 0) return false;
+  const [payload, sig] = tok.split('.');
+  const expected = b64url(crypto.createHmac('sha256', sessionKey()).update(payload).digest());
+  const a = Buffer.from(sig || ''), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
+  try {
+    const { exp } = JSON.parse(Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString());
+    return typeof exp === 'number' && exp > Date.now();
+  } catch (e) { return false; }
+}
+function setSessionCookie(res) {
+  const exp = Date.now() + SESSION_HOURS * 3600 * 1000;
+  res.setHeader('Set-Cookie', `sv_session=${signSession(exp)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_HOURS * 3600}`);
+}
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/') || PUBLIC_API.has(req.path)) return next();
+  if (hasValidSession(req)) return next();
+  return res.status(401).json({ error: 'session_required', detail: 'Tu sesión ha caducado. Vuelve a introducir el código de tu app de autenticación.' });
+});
 
 // ─── SUPABASE (almacenamiento persistente) ─────────────────────────────────────
 // Usamos la clave "service_role", no la anónima: con RLS cerrado (sin políticas
@@ -84,17 +139,36 @@ const store = {
 
 // ─── SEGURIDAD DE ACCESO (Google Authenticator / TOTP) ──────────────────────
 // Verifica el código de 6 dígitos de la app de autenticación para acceder a la app
-app.post('/api/access', (req, res) => {
+// Protección contra fuerza bruta: tras 10 códigos fallidos en 15 minutos, se bloquea
+// la entrada 15 minutos (los fallos se guardan en Supabase, tabla access_failures).
+const MAX_ACCESS_FAILS = 10, ACCESS_WINDOW_MIN = 15;
+async function recentAccessFailures() {
+  try {
+    const since = new Date(Date.now() - ACCESS_WINDOW_MIN * 60000).toISOString();
+    const rows = await sbGet('access_failures', `?at=gte.${since}&select=id`);
+    return (rows || []).length;
+  } catch (e) { return 0; }
+}
+app.post('/api/access', async (req, res) => {
   const { code } = req.body;
-  const result = verifyTotp(code);
-  if (result === null) {
+  if (!process.env.TOTP_SECRET) {
     // No hay secreto TOTP configurado: se permite el acceso para no bloquear la app
     return res.json({ ok: true, noAuthSet: true });
   }
-  if (result === true) {
+  if (await recentAccessFailures() >= MAX_ACCESS_FAILS) {
+    return res.status(429).json({ ok: false, error: 'too_many_attempts', detail: `Demasiados intentos fallidos. Espera ${ACCESS_WINDOW_MIN} minutos y vuelve a probar.` });
+  }
+  if (verifyTotp(code) === true) {
+    setSessionCookie(res);
     return res.json({ ok: true });
   }
+  try { await sbUpsert('access_failures', { at: new Date().toISOString() }); } catch (e) {}
   return res.status(403).json({ ok: false, error: 'Código incorrecto o caducado' });
+});
+
+// ¿Sigue viva la sesión? (lo usa la pantalla al volver de conectar LinkedIn)
+app.get('/api/session', (req, res) => {
+  res.json({ ok: hasValidSession(req) });
 });
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
@@ -166,7 +240,7 @@ async function requireAuth(req, res, next) {
 // ─── PUBLISH ──────────────────────────────────────────────────────────────────
 
 app.post('/api/publish', requireAuth, async (req, res) => {
-  const { text, scheduledAt, code, image } = req.body;
+  const { text, scheduledAt, code, image, firstComment } = req.body;
   if (!text) return res.status(400).json({ error: 'Missing text' });
 
   // Verificar código de la app de autenticación (segunda barrera de seguridad)
@@ -188,6 +262,12 @@ app.post('/api/publish', requireAuth, async (req, res) => {
       }
     }
     const result = await publishToLinkedIn(text, req.linkedinSession, imageAsset);
+    // Enlace como primer comentario (si se pidió). Si LinkedIn no lo permite, el post
+    // ya está publicado igualmente: se avisa al usuario para que lo pegue a mano.
+    let comment = null;
+    if (firstComment && String(firstComment).trim()) {
+      comment = await addFirstComment(result.linkedinId, String(firstComment).trim(), req.linkedinSession);
+    }
     // Guardar en el historial de publicados
     try {
       await sbUpsert('scheduled_posts', {
@@ -195,10 +275,13 @@ app.post('/api/publish', requireAuth, async (req, res) => {
         scheduled_at: new Date().toISOString(),
         status: 'published',
         published_at: new Date().toISOString(),
-        linkedin_id: result.linkedinId
+        linkedin_id: result.linkedinId,
+        first_comment: comment ? String(firstComment).trim() : null,
+        comment_status: comment ? (comment.ok ? 'ok' : 'failed') : null
       });
     } catch(e) { console.error('No se pudo guardar en historial:', e.message); }
-    res.json({ ok: true, status: 'published', linkedinId: result.linkedinId, withImage: !!imageAsset });
+    res.json({ ok: true, status: 'published', linkedinId: result.linkedinId, withImage: !!imageAsset,
+      comment: comment ? { ok: comment.ok } : null });
   } catch (err) {
     console.error('Publish error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Failed to publish', detail: err.response?.data });
@@ -297,10 +380,35 @@ async function publishToLinkedIn(text, session, imageAsset) {
   return { linkedinId: publishRes.data.id };
 }
 
+// Publica un comentario en un post propio (el "primer comentario" con el enlace).
+// Ojo: según la documentación de LinkedIn, comentar exige el permiso w_member_social_feed,
+// que esta app puede no tener. Se intenta por las dos vías de la API y, si ninguna
+// funciona, se devuelve ok:false sin romper la publicación.
+async function addFirstComment(postUrn, text, session) {
+  const actor = `urn:li:person:${session.profile?.sub}`;
+  const body = { actor, object: postUrn, message: { text } };
+  const enc = encodeURIComponent(postUrn);
+  const attempts = [
+    { url: `https://api.linkedin.com/v2/socialActions/${enc}/comments`, headers: { 'X-Restli-Protocol-Version': '2.0.0' } },
+    { url: `https://api.linkedin.com/rest/socialActions/${enc}/comments`, headers: { 'X-Restli-Protocol-Version': '2.0.0', 'LinkedIn-Version': '202509' } }
+  ];
+  let lastErr = null;
+  for (const a of attempts) {
+    try {
+      await axios.post(a.url, body, { headers: { Authorization: `Bearer ${session.accessToken}`, 'Content-Type': 'application/json', ...a.headers }, timeout: 10000 });
+      return { ok: true };
+    } catch (e) {
+      lastErr = e.response?.data || e.message;
+    }
+  }
+  console.error('First comment failed:', JSON.stringify(lastErr).slice(0, 300));
+  return { ok: false, error: lastErr };
+}
+
 // ─── PROGRAMACIÓN DE POSTS ──────────────────────────────────────────────────
 // Programar un post para el futuro
 app.post('/api/schedule', requireAuth, async (req, res) => {
-  const { text, scheduledAt, code } = req.body;
+  const { text, scheduledAt, code, firstComment } = req.body;
   if (!text || !scheduledAt) return res.status(400).json({ error: 'Faltan datos' });
   const totp = verifyTotp(code);
   if (totp === false) {
@@ -310,7 +418,8 @@ app.post('/api/schedule', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'La fecha debe ser futura' });
   }
   try {
-    await sbUpsert('scheduled_posts', { text, scheduled_at: scheduledAt, status: 'pending' });
+    await sbUpsert('scheduled_posts', { text, scheduled_at: scheduledAt, status: 'pending',
+      first_comment: firstComment && String(firstComment).trim() ? String(firstComment).trim() : null });
     res.json({ ok: true });
   } catch(e) {
     res.status(500).json({ error: 'No se pudo programar', detail: e.message });
@@ -372,8 +481,13 @@ app.get('/api/cron/publish-due', async (req, res) => {
     for (const post of (due || [])) {
       try {
         const result = await publishToLinkedIn(post.text, session);
+        let commentStatus = null;
+        if (post.first_comment) {
+          const c = await addFirstComment(result.linkedinId, post.first_comment, session);
+          commentStatus = c.ok ? 'ok' : 'failed';
+        }
         await axios.patch(`${SB_URL}/rest/v1/scheduled_posts?id=eq.${post.id}`,
-          { status: 'published', published_at: new Date().toISOString(), linkedin_id: result.linkedinId },
+          { status: 'published', published_at: new Date().toISOString(), linkedin_id: result.linkedinId, comment_status: commentStatus },
           { headers: sbHeaders });
         results.push({ id: post.id, status: 'published' });
       } catch(err) {
@@ -504,23 +618,46 @@ app.post('/api/generate', async (req, res) => {
     : 'Escribe el post en ESPAÑOL.';
 
   // Fuente del contenido: tema descubierto, o enlace/texto propio del usuario
-  const customSource = req.body.customSource; // { url, text } opcional
+  const customSource = req.body.customSource; // { url, text } o { idea, answers } opcional
+  const isIdea = !!(customSource && customSource.idea && String(customSource.idea).trim());
   let sourceBlock;
-  if (customSource && (customSource.url || customSource.text)) {
+  if (isIdea) {
+    const qa = (Array.isArray(customSource.answers) ? customSource.answers : [])
+      .filter(x => x && x.q && x.a && String(x.a).trim())
+      .slice(0, 5);
+    sourceBlock = `MODO IDEA PROPIA (no hay noticia de partida): el post nace de una idea o reflexión del autor.
+Idea del autor: ${String(customSource.idea).trim().slice(0, 2000)}
+${qa.length ? 'Lo que el autor ha contado al responder unas preguntas:\n' + qa.map(x => `- ${String(x.q).slice(0, 300)}\n  → ${String(x.a).trim().slice(0, 1500)}`).join('\n') : ''}
+REGLAS DE ESTE MODO: construye el post a partir de lo que el autor ha contado, en primera persona y con naturalidad. NO inventes anécdotas, cifras, clientes, empresas ni experiencias que el autor no haya dado. Si hace falta un dato que no tienes, plantéalo como reflexión o pregunta, nunca como hecho. Los "datos concretos" del estilo de abajo solo si el autor los ha aportado.`;
+  } else if (customSource && (customSource.url || customSource.text)) {
     sourceBlock = `El usuario aporta esta fuente para comentar:
 ${customSource.url ? 'URL: ' + customSource.url : ''}
 ${customSource.text ? 'Texto/contexto: ' + customSource.text : ''}
 Basa el post en esta fuente. Si hay datos o cifras concretas, ÚSALOS.`;
   } else {
+    if (!topic) return res.status(400).json({ error: 'Falta el tema o la idea' });
     sourceBlock = `Tema: ${topic.title}
 Por qué importa: ${topic.why}
 Ángulo: ${topic.angle}`;
   }
 
+  // Tu voz: posts reales del autor guardados como referencia de estilo
+  let voiceBlock = '';
+  try {
+    const vs = await sbGet('voice_samples', '?select=text&order=created_at.desc&limit=5');
+    if (vs && vs.length) {
+      voiceBlock = `EJEMPLOS DE ESTILO DEL AUTOR (posts reales suyos). Imita su voz: ritmo, longitud de frases, vocabulario, forma de abrir y de cerrar, uso de emojis y de hashtags. Su voz manda sobre el estilo genérico que se describe más abajo, salvo en la longitud pedida y en la regla de independencia. NO copies su contenido, sus datos ni sus frases: son solo referencia de estilo.
+${vs.map((v, i) => `--- Ejemplo ${i + 1} ---\n${String(v.text).slice(0, 1800)}`).join('\n')}
+--- Fin de los ejemplos ---`;
+    }
+  } catch (e) { console.error('voice samples load error:', e.message); }
+
   try {
     const messages = [{
       role: 'user',
       content: `Perfil del autor: ${profile}
+
+${voiceBlock}
 
 ${sourceBlock}
 
@@ -553,6 +690,7 @@ ESTILO OBLIGATORIO (imita EXACTAMENTE este patrón, basado en posts de referenci
 IMPORTANTE sobre la voz: escribes como analista INDEPENDIENTE del sector. NO hables en nombre de ninguna empresa concreta ni des a entender que representas a una compañía. Comenta la actualidad con criterio propio de experto, como un observador de la industria. NUNCA menciones la empresa en la que trabaja el autor (en particular, nunca escribas "Paramount") ni frases del tipo "en mi empresa", "nosotros en...", "hemos lanzado". La experiencia se cuenta en primera persona como trayectoria profesional ("en los acuerdos de distribución que he negociado..."), nunca como portavoz de una compañía.
 
 ${customSource ? '' : 'Si el tema afecta a España o Portugal, dale especial relevancia a ese ángulo local.'}
+No incluyas enlaces (URLs) dentro del post.
 
 ⚠️ LONGITUD (regla prioritaria, respétala por encima de todo): ${lengthMap[length] || lengthMap.l500} Cuenta los caracteres del post (sin contar hashtags) y ajústate a ese límite. Si te pasas, recorta hasta cumplirlo. Los hashtags van aparte y no cuentan para el límite.
 
@@ -586,19 +724,104 @@ Solo el texto del post, listo para copiar.`
     });
 
     let text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
-    // Añadir el enlace real al final del post (genera preview en LinkedIn)
-    // Solo si hay URL real: del tema (source web) o del enlace propio del usuario
+    // El enlace de la noticia YA NO se mete dentro del texto (un enlace en el cuerpo reduce
+    // mucho el alcance). Se devuelve aparte para ofrecerlo como primer comentario al publicar.
     let articleUrl = '';
     if (customSource && customSource.url) articleUrl = customSource.url;
-    else if (topic && topic.source === 'web' && topic.url) articleUrl = topic.url;
-    if (articleUrl && !text.includes(articleUrl)) {
-      text = text.trimEnd() + '\n\n' + articleUrl;
-    }
+    else if (topic && topic.url) articleUrl = topic.url;
     res.json({ text, articleUrl });
   } catch (err) {
     console.error('Generate error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Generation failed', detail: err.response?.data?.error?.message || err.message });
   }
+});
+
+// ─── UTILIDADES PARA LLAMADAS CORTAS A CLAUDE ─────────────────────────────────
+async function askClaude(prompt, maxTokens = 700, timeout = 25000) {
+  const r = await axios.post('https://api.anthropic.com/v1/messages', {
+    model: CLAUDE_MODEL,
+    max_tokens: maxTokens,
+    system: 'Ayudas a Borja Pérez Herraiz, experto independiente del sector audiovisual (distribución, OTT, FAST, SVOD, partnerships), a escribir en LinkedIn. Nunca escribes en nombre de ninguna empresa ni mencionas la empresa en la que trabaja (en particular, nunca "Paramount"). Respondes SOLO con el JSON pedido.',
+    messages: [{ role: 'user', content: prompt }]
+  }, {
+    headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+    timeout
+  });
+  return r.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
+}
+// Extrae un array JSON de textos de la respuesta del modelo
+function extractStringArray(text) {
+  const clean = String(text || '').replace(/```json/gi, '').replace(/```/g, '').trim();
+  const tryParse = (t) => { try { const p = JSON.parse(t); return Array.isArray(p) ? p.filter(x => typeof x === 'string' && x.trim()).map(x => x.trim()) : null; } catch (e) { return null; } };
+  let out = tryParse(clean);
+  if (!out) { const a = clean.indexOf('['), b = clean.lastIndexOf(']'); if (a > -1 && b > a) out = tryParse(clean.slice(a, b + 1)); }
+  return out || [];
+}
+
+// Generador de ganchos: 5 primeras líneas alternativas para un borrador
+app.post('/api/hooks', async (req, res) => {
+  const { text, lang } = req.body;
+  if (!text || !String(text).trim()) return res.status(400).json({ error: 'Falta el borrador' });
+  const en = lang === 'en';
+  const prompt = `Este es el borrador de un post de LinkedIn (entre <<< y >>>):
+<<<
+${String(text).slice(0, 4000)}
+>>>
+Propón 5 PRIMERAS LÍNEAS (ganchos) alternativas para este post${en ? ', en inglés' : ', en español'}. Cada una con una técnica distinta: 1) un dato o cifra, 2) una paradoja, 3) una tesis a contracorriente, 4) una pregunta incisiva, 5) una escena o ejemplo concreto.
+Reglas: máximo 150 caracteres cada una; que se entiendan sin leer el resto; basadas SOLO en lo que dice el borrador (no inventes datos ni cifras que no estén); nada de preámbulos tipo "Hoy quiero hablar de"; sin hashtags ni emojis.
+Devuelve SOLO un array JSON de 5 textos.`;
+  try {
+    const hooks = extractStringArray(await askClaude(prompt, 700)).slice(0, 5);
+    if (!hooks.length) return res.status(502).json({ error: 'No se pudieron generar ganchos' });
+    res.json({ hooks });
+  } catch (e) {
+    console.error('hooks error:', e.response?.data || e.message);
+    res.status(500).json({ error: 'No se pudieron generar ganchos' });
+  }
+});
+
+// Modo "Idea propia": 3 preguntas cortas para sacar material del autor antes de redactar
+app.post('/api/idea-questions', async (req, res) => {
+  const { idea } = req.body;
+  if (!idea || !String(idea).trim()) return res.status(400).json({ error: 'Falta la idea' });
+  const prompt = `Borja quiere escribir un post de LinkedIn a partir de esta idea suya (entre <<< y >>>):
+<<<
+${String(idea).slice(0, 2000)}
+>>>
+Hazle 3 preguntas cortas (máximo 120 caracteres cada una), en español y tuteándole, para sacar material propio que haga el post único:
+1) una experiencia o ejemplo concreto que haya vivido relacionado con la idea,
+2) un dato, caso o situación del mercado que conozca y la respalde,
+3) su postura clara o lo que cree que el sector está haciendo mal o bien.
+No le preguntes por su empresa ni por información confidencial.
+Devuelve SOLO un array JSON de 3 textos.`;
+  try {
+    const questions = extractStringArray(await askClaude(prompt, 400)).slice(0, 3);
+    if (!questions.length) return res.status(502).json({ error: 'No se pudieron generar preguntas' });
+    res.json({ questions });
+  } catch (e) {
+    console.error('idea-questions error:', e.response?.data || e.message);
+    res.status(500).json({ error: 'No se pudieron generar preguntas' });
+  }
+});
+
+// Tu voz: posts propios que sirven de referencia de estilo (máx. 10 guardados; se usan los 5 últimos)
+app.get('/api/voice-samples', async (req, res) => {
+  try { res.json(await sbGet('voice_samples', '?select=*&order=created_at.desc') || []); }
+  catch (e) { res.json([]); }
+});
+app.post('/api/voice-samples', async (req, res) => {
+  const text = String(req.body?.text || '').trim();
+  if (text.length < 80) return res.status(400).json({ error: 'Pega un post completo (al menos 80 caracteres).' });
+  try {
+    const existing = await sbGet('voice_samples', '?select=id') || [];
+    if (existing.length >= 10) return res.status(400).json({ error: 'Ya tienes 10 posts guardados. Borra alguno antes de añadir otro.' });
+    const row = await sbUpsert('voice_samples', { text: text.slice(0, 5000) });
+    res.json(row[0] || { ok: true });
+  } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
+});
+app.delete('/api/voice-samples/:id', async (req, res) => {
+  try { await sbDelete('voice_samples', `?id=eq.${Number(req.params.id)}`); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ error: 'No se pudo borrar' }); }
 });
 
 // ─── TIPS ENGINE ─────────────────────────────────────────────────────────────
