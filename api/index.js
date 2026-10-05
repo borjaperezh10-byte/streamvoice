@@ -21,6 +21,10 @@ function verifyTotp(code) {
   }
 }
 
+// ─── MODELO DE IA ─────────────────────────────────────────────────────────────
+// Un único sitio para cambiar el modelo de Claude que usa toda la app.
+const CLAUDE_MODEL = 'claude-sonnet-5-5';
+
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '../public')));
@@ -546,7 +550,7 @@ ESTILO OBLIGATORIO (imita EXACTAMENTE este patrón, basado en posts de referenci
 
 6. Termina con 4-6 hashtags relevantes y específicos (mezcla sector + nombres propios del tema), en una línea aparte. Si el tono es muy sobrio, pueden ser menos.
 
-IMPORTANTE sobre la voz: escribes como analista INDEPENDIENTE del sector. NO hables en nombre de ninguna empresa concreta ni des a entender que representas a una compañía. Comenta la actualidad con criterio propio de experto, como un observador de la industria.
+IMPORTANTE sobre la voz: escribes como analista INDEPENDIENTE del sector. NO hables en nombre de ninguna empresa concreta ni des a entender que representas a una compañía. Comenta la actualidad con criterio propio de experto, como un observador de la industria. NUNCA menciones la empresa en la que trabaja el autor (en particular, nunca escribas "Paramount") ni frases del tipo "en mi empresa", "nosotros en...", "hemos lanzado". La experiencia se cuenta en primera persona como trayectoria profesional ("en los acuerdos de distribución que he negociado..."), nunca como portavoz de una compañía.
 
 ${customSource ? '' : 'Si el tema afecta a España o Portugal, dale especial relevancia a ese ángulo local.'}
 
@@ -562,7 +566,7 @@ Solo el texto del post, listo para copiar.`
     const finalMaxTok = (customSource && customSource.url) ? maxTok + 400 : maxTok;
 
     const body = {
-      model: 'claude-sonnet-4-6',
+      model: CLAUDE_MODEL,
       max_tokens: finalMaxTok,
       system: `Eres el ghostwriter de Borja Pérez Herraiz, experto independiente en el sector audiovisual con +15 años en distribución multiplataforma, OTT, FAST, SVOD y partnerships. Escribes posts de LinkedIn al estilo de un analista senior de la industria: arranque con dato o giro, cuerpo con cifras y nombres reales, lectura estratégica de fondo, y cierre que eleva (pregunta, aforismo o gancho). Directo, con criterio propio, cero relleno motivacional. Escribes como observador independiente del sector, nunca en nombre de una empresa concreta. RESPETA SIEMPRE el límite de longitud que se te indica.`,
       messages
@@ -623,8 +627,8 @@ app.get('/api/tips', requireAuth, (req, res) => {
     },
     {
       icon: '🎯',
-      title: 'Tu diferencial: perspectiva de Paramount',
-      body: 'Posts que empiezan con "En Paramount hemos visto..." o "Después de 15 años negociando distribución..." generan 3x más engagement que los de opinión genérica. Tu perspectiva insider es tu ventaja.',
+      title: 'Tu diferencial: tu experiencia, no tu empresa',
+      body: 'Los posts que parten de vivencia propia ("Después de 15 años negociando acuerdos de distribución...", "En las negociaciones de carriage que he visto...") generan mucho más debate que la opinión genérica. Habla siempre como experto independiente: nunca en nombre de ninguna compañía ni insinuando que la representas.',
       priority: 'high'
     },
     {
@@ -751,10 +755,16 @@ app.post('/api/sources', async (req, res) => {
 });
 
 app.patch('/api/sources/:id', async (req, res) => {
-  const { active, sectors } = req.body;
+  const { active, sectors, rss_url } = req.body;
   const patch = {};
   if (active !== undefined) patch.active = active;
   if (sectors !== undefined) patch.sectors = Array.isArray(sectors) && sectors.length ? sectors : null;
+  if (rss_url !== undefined) {
+    // RSS editado a mano: se guarda y queda pendiente de comprobar
+    const u = String(rss_url || '').trim();
+    patch.rss_url = u ? (/^https?:\/\//i.test(u) ? u : 'https://' + u) : null;
+    patch.rss_status = null; patch.rss_items = null; patch.rss_checked_at = null;
+  }
   try {
     await axios.patch(`${SB_URL}/rest/v1/sources?id=eq.${req.params.id}`, patch, { headers: sbHeaders });
     res.json({ ok: true });
@@ -768,7 +778,7 @@ app.delete('/api/sources/:id', async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'No se pudo borrar' }); }
 });
 
-// Marcas de referencia por categoría, para reforzar la búsqueda de FASE 1 con nombres
+// Marcas de referencia por categoría, para reforzar la búsqueda con nombres
 // concretos del sector (el buscador rinde mejor con nombres propios que con términos genéricos).
 const SECTOR_BRANDS = {
   streaming: ['Netflix', 'Disney+', 'Max', 'Prime Video', 'Apple TV+', 'Movistar Plus+', 'DAZN', 'SkyShowtime'],
@@ -779,8 +789,242 @@ const SECTOR_BRANDS = {
   partnerships: ['Netflix', 'Warner Bros Discovery', 'Comcast', 'Skydance', 'Banijay', 'NBCUniversal']
 };
 const DEFAULT_BRANDS = ['Netflix', 'Disney+', 'Max', 'Prime Video', 'SkyShowtime', 'Pluto TV'];
+const SECTOR_LABELS = {
+  streaming: 'Streaming & SVOD', fast: 'FAST & Free TV', operadores: 'Operadores y Pay TV',
+  contenido: 'Contenido (producción y distribución)', adtech: 'Ad Tech & CTV', partnerships: 'Partnerships, acuerdos y M&A'
+};
+
+// ─── RSS: lectura de los feeds de las fuentes ────────────────────────────────
+// Los RSS dan la fecha EXACTA de cada noticia, son gratis e instantáneos. Así la IA
+// ya no tiene que "adivinar" fechas buscando en la web: solo elige y propone ángulos.
+const RSS_UA = 'Mozilla/5.0 (compatible; StreamVoice RSS reader)';
+const RSS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // ventana de frescura: 7 días
+
+// Descarga una URL y la decodifica respetando su codificación (UTF-8, ISO-8859-1...)
+async function fetchDecoded(url, timeoutMs = 6000) {
+  const r = await axios.get(url, {
+    timeout: timeoutMs,
+    responseType: 'arraybuffer',
+    maxContentLength: 5 * 1024 * 1024,
+    maxRedirects: 5,
+    headers: {
+      'User-Agent': RSS_UA,
+      'Accept': 'application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.9, text/html;q=0.8, */*;q=0.5'
+    }
+  });
+  const buf = Buffer.from(r.data);
+  const head = buf.subarray(0, 300).toString('latin1');
+  const ctype = String(r.headers['content-type'] || '');
+  const enc = ((head.match(/encoding=["']([\w-]+)["']/i) || [])[1] ||
+               (ctype.match(/charset=([\w-]+)/i) || [])[1] || 'utf-8').toLowerCase();
+  let text;
+  try { text = new TextDecoder(enc).decode(buf); } catch (e) { text = buf.toString('utf8'); }
+  return { text, finalUrl: r.request?.res?.responseUrl || url };
+}
+
+const HTML_ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', hellip: '…', mdash: '—', ndash: '–',
+  lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', laquo: '«', raquo: '»', euro: '€', iexcl: '¡', iquest: '¿',
+  aacute: 'á', eacute: 'é', iacute: 'í', oacute: 'ó', uacute: 'ú', ntilde: 'ñ', uuml: 'ü', ccedil: 'ç',
+  Aacute: 'Á', Eacute: 'É', Iacute: 'Í', Oacute: 'Ó', Uacute: 'Ú', Ntilde: 'Ñ', Uuml: 'Ü', Ccedil: 'Ç',
+  atilde: 'ã', otilde: 'õ', acirc: 'â', ecirc: 'ê', ocirc: 'ô', agrave: 'à', egrave: 'è', ograve: 'ò',
+  Atilde: 'Ã', Otilde: 'Õ', Acirc: 'Â', Ecirc: 'Ê', Ocirc: 'Ô', Agrave: 'À'
+};
+function decodeEntities(s) {
+  return String(s || '').replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
+    if (e[0] === '#') {
+      const code = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+      try { return String.fromCodePoint(code); } catch (err) { return m; }
+    }
+    return Object.prototype.hasOwnProperty.call(HTML_ENTITIES, e) ? HTML_ENTITIES[e] : m;
+  });
+}
+// Convierte el contenido de una etiqueta (con CDATA, HTML o entidades) en texto limpio
+function cleanText(raw) {
+  let t = String(raw || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
+  t = decodeEntities(t);                 // &lt;p&gt; → <p>
+  t = t.replace(/<[^>]*>/g, ' ');        // quitar etiquetas HTML
+  t = decodeEntities(t);                 // entidades que quedaran dentro del HTML
+  return t.replace(/\s+/g, ' ').trim();
+}
+function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+// Contenido de la primera etiqueta <name>…</name> (admite nombres con prefijo, ej. dc:date)
+function getTag(block, name) {
+  const m = block.match(new RegExp('<' + escapeRe(name) + '(?:\\s[^>]*)?>([\\s\\S]*?)</' + escapeRe(name) + '>', 'i'));
+  return m ? m[1] : '';
+}
+// Fechas de feeds: RFC 822 ("Fri, 02 Oct 2026 10:49:33 +0000") o ISO. Algunos medios
+// españoles/portugueses usan nombres de día/mes en su idioma: los pasamos a inglés.
+const MONTH_WORDS = {
+  ene: 'Jan', jan: 'Jan', feb: 'Feb', fev: 'Feb', mar: 'Mar', abr: 'Apr', apr: 'Apr', may: 'May', mai: 'May',
+  jun: 'Jun', jul: 'Jul', ago: 'Aug', aug: 'Aug', sep: 'Sep', set: 'Sep', oct: 'Oct', out: 'Oct',
+  nov: 'Nov', dic: 'Dec', dez: 'Dec', dec: 'Dec'
+};
+function parseFeedDate(raw) {
+  if (!raw) return null;
+  let d = new Date(raw);
+  if (isNaN(d.getTime())) {
+    // Formato "Día, 05 Mes 2026 12:13:29 +0200" con nombres en otro idioma:
+    // quitamos el día de la semana y traducimos el mes.
+    const m = String(raw).trim().match(/^(?:[^\d,]+,?\s*)?(\d{1,2})\s+([^\s\d.]+)\.?\s+(\d{4})(.*)$/);
+    if (m) {
+      const mon = MONTH_WORDS[m[2].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').slice(0, 3)];
+      if (mon) d = new Date(`${m[1]} ${mon} ${m[3]}${m[4]}`);
+    }
+  }
+  return d && !isNaN(d.getTime()) ? d.toISOString() : null;
+}
+// Interpreta un feed RSS 2.0 / RSS 1.0 (RDF) / Atom y devuelve sus noticias
+function parseFeed(xml) {
+  const items = [];
+  const blocks = [
+    ...(xml.match(/<item(?:\s[^>]*)?>[\s\S]*?<\/item>/gi) || []),
+    ...(xml.match(/<entry(?:\s[^>]*)?>[\s\S]*?<\/entry>/gi) || [])
+  ];
+  for (const b of blocks) {
+    const title = cleanText(getTag(b, 'title'));
+    // Enlace: RSS (<link>url</link>), Atom (<link rel="alternate" href="..."/>), Feedburner, guid
+    let link = cleanText(getTag(b, 'feedburner:origLink')) || cleanText(getTag(b, 'link'));
+    if (!link) {
+      const tags = b.match(/<link\b[^>]*>/gi) || [];
+      const alt = tags.find(t => /rel=["']alternate["']/i.test(t)) || tags.find(t => !/rel=/i.test(t)) || tags[0];
+      const href = alt && (alt.match(/href=["']([^"']+)["']/i) || [])[1];
+      if (href) link = decodeEntities(href);
+    }
+    if (!link) {
+      const guid = cleanText(getTag(b, 'guid'));
+      if (/^https?:\/\//i.test(guid)) link = guid;
+    }
+    const dateRaw = cleanText(getTag(b, 'pubDate')) || cleanText(getTag(b, 'dc:date')) ||
+                    cleanText(getTag(b, 'published')) || cleanText(getTag(b, 'updated')) ||
+                    cleanText(getTag(b, 'a10:updated'));
+    const date = parseFeedDate(dateRaw);
+    const summary = cleanText(getTag(b, 'description') || getTag(b, 'summary') || getTag(b, 'content:encoded') || getTag(b, 'content'));
+    if (title && link) items.push({ title, link, date, summary });
+  }
+  return items;
+}
+function looksLikeFeed(text) {
+  return /<(rss|feed|rdf:RDF)\b/i.test(String(text || '').slice(0, 3000));
+}
+function siteBaseUrl(url) {
+  let u = String(url || '').trim();
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  return u;
+}
+// Busca el RSS de una web: primero los <link rel="alternate"> de la portada,
+// luego rutas habituales (/feed/, /rss...). Devuelve { url, count } o null.
+async function discoverFeed(siteUrl) {
+  const base = siteBaseUrl(siteUrl);
+  let origin;
+  try { origin = new URL(base).origin; } catch (e) { return null; }
+  const candidates = [];
+  try {
+    const { text } = await fetchDecoded(base, 6000);
+    if (looksLikeFeed(text) && parseFeed(text).length) return { url: base, count: parseFeed(text).length };
+    const linkTags = text.match(/<link\b[^>]*>/gi) || [];
+    for (const t of linkTags) {
+      if (!/rel=["']?alternate/i.test(t) || !/(rss|atom)\+xml/i.test(t)) continue;
+      const href = (t.match(/href=["']([^"']+)["']/i) || [])[1];
+      if (!href || /comments?/i.test(href)) continue;
+      try { candidates.push(new URL(decodeEntities(href), base).href); } catch (e) {}
+    }
+  } catch (e) { /* portada inaccesible: probamos rutas habituales igualmente */ }
+  const basePath = base.replace(/\/+$/, '');
+  const paths = ['/feed/', '/rss', '/rss.xml', '/feed.xml', '/feeds/all', '/index.xml', '/rss/'];
+  if (basePath !== origin) paths.forEach(p => candidates.push(basePath + p)); // ej. /invertia/feed/
+  paths.forEach(p => candidates.push(origin + p));
+  const unique = [...new Set(candidates)].slice(0, 12);
+  const results = await Promise.allSettled(unique.map(async (u) => {
+    const { text } = await fetchDecoded(u, 6000);
+    if (!looksLikeFeed(text)) throw new Error('no es un feed');
+    const n = parseFeed(text).length;
+    if (!n) throw new Error('feed vacío');
+    return { url: u, count: n };
+  }));
+  // Respetamos el orden de prioridad: el primero de la lista que funcione
+  for (const r of results) if (r.status === 'fulfilled') return r.value;
+  return null;
+}
+async function updateSourceRow(id, patch) {
+  await axios.patch(`${SB_URL}/rest/v1/sources?id=eq.${id}`, patch, { headers: sbHeaders });
+}
+function isProfileUrl(url) { return /linkedin\.com/i.test(String(url || '')); }
+
+// Endpoint: detectar/comprobar los RSS de las fuentes.
+// Body opcional: { ids: [..] } para comprobar solo algunas. Si una fuente ya tiene
+// rss_url se comprueba esa; si no, se intenta descubrir.
+app.post('/api/sources/discover-rss', async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Boolean) : null;
+    let srcs = await sbGet('sources', '?select=id,name,url,rss_url,active');
+    srcs = (srcs || []).filter(s => s.url && !isProfileUrl(s.url) && (ids ? ids.includes(s.id) : s.active));
+    const checkedAt = new Date().toISOString();
+    const results = await Promise.all(srcs.map(async (s) => {
+      let found = null;
+      if (s.rss_url) {
+        try {
+          const { text } = await fetchDecoded(s.rss_url, 7000);
+          const n = looksLikeFeed(text) ? parseFeed(text).length : 0;
+          if (n) found = { url: s.rss_url, count: n };
+        } catch (e) { /* lo marcamos como error abajo */ }
+        if (!found) {
+          await updateSourceRow(s.id, { rss_status: 'error', rss_items: 0, rss_checked_at: checkedAt });
+          return { id: s.id, name: s.name, status: 'error', rss_url: s.rss_url };
+        }
+      } else {
+        try { found = await discoverFeed(s.url); } catch (e) { found = null; }
+        if (!found) {
+          await updateSourceRow(s.id, { rss_status: 'sin_rss', rss_items: 0, rss_checked_at: checkedAt });
+          return { id: s.id, name: s.name, status: 'sin_rss' };
+        }
+      }
+      await updateSourceRow(s.id, { rss_url: found.url, rss_status: 'ok', rss_items: found.count, rss_checked_at: checkedAt });
+      return { id: s.id, name: s.name, status: 'ok', rss_url: found.url, items: found.count };
+    }));
+    res.json({ ok: true, checkedAt, results });
+  } catch (e) {
+    console.error('discover-rss error:', e.response?.data || e.message);
+    res.status(500).json({ error: 'No se pudieron comprobar los RSS' });
+  }
+});
+
+// Lee los RSS de varias fuentes en paralelo y devuelve las noticias de los últimos 7 días
+async function readRssPool(rssSources) {
+  const nowMs = Date.now();
+  const failed = [];
+  const perFeed = await Promise.all(rssSources.map(async (s) => {
+    try {
+      const { text } = await fetchDecoded(s.rss_url, 7000);
+      const items = parseFeed(text)
+        .filter(it => it.date && (nowMs - new Date(it.date).getTime()) <= RSS_MAX_AGE_MS && new Date(it.date).getTime() <= nowMs + 3600000)
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 15)
+        .map(it => ({ ...it, source: s.name }));
+      return items;
+    } catch (e) {
+      failed.push(s);
+      return [];
+    }
+  }));
+  // Quitar duplicados exactos de enlace y quedarnos con las 180 más recientes (control de coste)
+  const seenLinks = new Set();
+  const pool = perFeed.flat()
+    .filter(it => { const k = it.link.split('#')[0]; if (seenLinks.has(k)) return false; seenLinks.add(k); return true; })
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 180)
+    .map((it, i) => ({ ...it, id: 'r' + (i + 1) }));
+  return { pool, failed };
+}
+
+function humanDateEs(iso) {
+  try {
+    return new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'short' }).format(new Date(iso));
+  } catch (e) { return String(iso || '').slice(0, 10); }
+}
 
 app.post('/api/search-topics', async (req, res) => {
+  const startedAt = Date.now();
   const { sector, sectorId } = req.body;
 
   // ── Límite: una búsqueda por sector y día natural (se resetea a las 00:00 hora española) ──
@@ -809,25 +1053,30 @@ app.post('/api/search-topics', async (req, res) => {
 
   // Cargar fuentes activas desde Supabase, filtradas por categoría cuando aplica.
   // Una fuente sin "sectors" asignado se considera válida para CUALQUIER categoría (comportamiento por defecto).
-  let sourcesList = '';
-  let sourceDomains = [];
+  let srcs = [];
   try {
     const filterQS = sectorId
-      ? `?active=eq.true&or=(sectors.is.null,sectors.cs.{${encodeURIComponent(sectorId)}})&select=name,url`
-      : '?active=eq.true&select=name,url';
-    const srcs = await sbGet('sources', filterQS);
-    if (srcs && srcs.length) {
-      sourcesList = srcs.map(s => s.name + (s.url ? ' ('+s.url+')' : '')).join(', ');
-      // Extraer dominios limpios para búsquedas site: (sin límite de 8; excluimos linkedin.com,
-      // que son perfiles de analistas, no medios con artículos indexables por site:)
-      sourceDomains = [...new Set(
-        srcs
-          .filter(s => s.url)
-          .map(s => s.url.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '').trim())
-          .filter(Boolean)
-      )].filter(d => !d.includes('linkedin.com'));
-    }
+      ? `?active=eq.true&or=(sectors.is.null,sectors.cs.{${encodeURIComponent(sectorId)}})&select=name,url,rss_url,rss_status`
+      : '?active=eq.true&select=name,url,rss_url,rss_status';
+    srcs = (await sbGet('sources', filterQS)) || [];
   } catch(e) { console.error('Sources load error:', e.message); }
+  srcs = srcs.filter(s => s.url && !isProfileUrl(s.url)); // los perfiles de LinkedIn no tienen RSS ni sirven para site:
+
+  // ── PASO 1: leer los RSS de las fuentes de esta categoría (fechas exactas) ──
+  const rssSources = srcs.filter(s => s.rss_url && s.rss_status !== 'error');
+  const { pool, failed } = rssSources.length ? await readRssPool(rssSources) : { pool: [], failed: [] };
+  const failedNames = new Set(failed.map(s => s.name));
+
+  // Fuentes que se cubren con búsqueda web (sin RSS o con el RSS caído hoy)
+  const webSources = srcs.filter(s => !s.rss_url || s.rss_status === 'error' || failedNames.has(s.name));
+  const webDomains = [...new Set(
+    webSources.map(s => s.url.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '').trim()).filter(Boolean)
+  )];
+  const DOMAIN_CHUNK_SIZE = 10;
+  const siteQueryGroups = [];
+  for (let i = 0; i < webDomains.length; i += DOMAIN_CHUNK_SIZE) {
+    siteQueryGroups.push(webDomains.slice(i, i + DOMAIN_CHUNK_SIZE).map(d => 'site:' + d).join(' OR '));
+  }
 
   const headers = {
     'x-api-key': process.env.ANTHROPIC_API_KEY,
@@ -835,70 +1084,79 @@ app.post('/api/search-topics', async (req, res) => {
     'Content-Type': 'application/json'
   };
   const now = new Date().toISOString();
-
-  // Trocea los dominios en grupos (una cadena "site:a OR site:b..." demasiado larga
-  // pierde eficacia en un buscador real). Cada grupo es una búsqueda site: independiente.
-  const DOMAIN_CHUNK_SIZE = 10;
-  const domainChunks = [];
-  for (let i = 0; i < sourceDomains.length; i += DOMAIN_CHUNK_SIZE) {
-    domainChunks.push(sourceDomains.slice(i, i + DOMAIN_CHUNK_SIZE));
-  }
-  const siteQueryGroups = domainChunks.map(chunk => chunk.map(d => 'site:' + d).join(' OR '));
   const brandList = (sectorId && SECTOR_BRANDS[sectorId]) || DEFAULT_BRANDS;
+  const sectorLabel = (sectorId && SECTOR_LABELS[sectorId]) || sector;
+  const MIN_RELEVANT = 4; // por debajo de esto, se completa con búsqueda web
 
-  const sourcesLine = sourcesList ? `Fuentes prioritarias del usuario: ${sourcesList}.` : '';
-  const strategyBlock = siteQueryGroups.length
-    ? `ESTRATEGIA DE BÚSQUEDA (en dos fases):
-FASE 1 (prioritaria): Busca PRIMERO dentro de las fuentes del usuario, usando el operador site:. Tienes ${siteQueryGroups.length} grupo(s) de dominios; lanza UNA búsqueda por cada grupo (no los mezcles todos en una sola query):
-${siteQueryGroups.map((g, i) => `  - Búsqueda ${i + 1}: "${sector} (${g})"`).join('\n')}
-También prueba variantes con nombres concretos de marcas propias de esta categoría (${brandList.join(', ')}) combinadas con estos dominios cuando aporte.
-FASE 2 (complemento): Si te queda margen de búsquedas, complementa con una búsqueda web general sobre "${sector}" (prueba también combinando con nombres como ${brandList.slice(0, 3).join(', ')}) para captar noticias de otras fuentes no listadas.`
-    : `Busca en la web noticias recientes sobre "${sector}" (prueba también combinando con nombres como ${brandList.slice(0, 3).join(', ')}).`;
-  // Presupuesto de búsquedas: una por grupo de dominios (FASE 1) + margen para FASE 2 y variantes de marca
-  const webSearchMaxUses = Math.min(10, Math.max(4, siteQueryGroups.length + 3));
-  const userPrompt = `Busca las noticias más relevantes y recientes (últimos 7 días) sobre: ${sector}.
+  const poolBlock = pool.length
+    ? `NOTICIAS DE TUS FUENTES (leídas de sus RSS; fechas exactas y verificadas, todas de los últimos 7 días):
+${pool.map(it => `[${it.id}] ${it.date.slice(0, 10)} · ${it.source} · ${it.title}${it.summary ? ' — ' + it.summary.slice(0, 140) : ''}`).join('\n')}`
+    : 'NOTICIAS DE TUS FUENTES: no hay noticias recientes en los RSS de esta categoría (o las fuentes no tienen RSS).';
+
+  const webStrategy = `BÚSQUEDA WEB (solo si hace falta, según la regla de arriba):
+${siteQueryGroups.length ? `- Primero en las fuentes del usuario que no tienen RSS, una búsqueda por grupo:
+${siteQueryGroups.map((g, i) => `  · Búsqueda ${i + 1}: "${sector} (${g})"`).join('\n')}
+` : ''}- Después, búsqueda general sobre "${sector}" combinando con nombres como ${brandList.slice(0, 4).join(', ')}.
+- Para lo que encuentres en la web: URL real, fecha de publicación verificada (AAAA-MM-DD) y SOLO de los últimos 7 días. Si no puedes verificar la fecha, no lo incluyas.`;
+
+  const userPrompt = `Categoría: ${sectorLabel}.
+Marcas y actores de referencia de esta categoría: ${brandList.join(', ')}.
 Fecha y hora actual de referencia: ${now}.
-${sourcesLine}
 
-${strategyBlock}
+${poolBlock}
 
-INSTRUCCIONES:
-- Devuelve hasta 8 noticias, ORDENADAS por relevancia (la más relevante primero).
-- ANTI-DUPLICADOS: si la misma noticia aparece en varios medios, INCLÚYELA UNA SOLA VEZ. Elige la versión más completa y reciente (la que tenga más detalle, datos o cobertura). No repitas la misma historia con distintas fuentes.
-- CRÍTICO: SOLO noticias publicadas en los ÚLTIMOS 7 DÍAS desde la fecha de referencia. Verifica la fecha real de publicación de cada noticia. Si una noticia tiene más de 7 días, NO la incluyas por muy relevante que sea.
-- Para cada noticia, incluye su fecha real de publicación en "published_date" en formato exacto AAAA-MM-DD. Si no puedes verificar la fecha, NO incluyas la noticia.
-- PRIORIZA España/Portugal, pero INCLUYE globales muy relevantes.
-- Marca ámbito: "espana" (mercado ibérico) o "global" (internacional).
-- URLs REALES y verificadas. No inventes.
-Devuelve SOLO un array JSON válido (sin backticks, sin texto antes ni después). Si no hay nada reciente, devuelve [].
-[{"title":"titular español max 13 palabras","why":"por qué importa (1 frase)","engagement":"hot|trending|normal","scope":"espana|global","tags":["t1","t2"],"angle":"ángulo de opinión (1 frase)","published":"texto legible ej 'Hace 2 días' o '9 jun'","published_date":"AAAA-MM-DD","url":"URL real"}]
+TAREA:
+1. Elige hasta 8 noticias RELEVANTES para la categoría "${sectorLabel}" y útiles para que un experto en distribución audiovisual, OTT, FAST, Pay TV y partnerships opine en LinkedIn. Descarta lo que no tenga lectura de negocio audiovisual (rodajes, festivales, estrenos, famosos, política general, deportes...), aunque venga de una fuente del usuario.
+2. Prioriza España/Portugal, pero incluye lo global muy relevante. Ordena por relevancia (la más relevante primero).
+3. ANTI-DUPLICADOS: si la misma historia aparece varias veces, inclúyela UNA SOLA VEZ (la versión más completa).
+4. REGLA DE BÚSQUEDA WEB: si de la lista de arriba salen ${MIN_RELEVANT} o más noticias relevantes, NO uses la búsqueda web. Solo si salen MENOS DE ${MIN_RELEVANT}, usa web_search para completar hasta 8.
 
-REGLA DE FORMATO CRÍTICA: NO expliques tu razonamiento ni escribas análisis en texto. NO escribas frases como "Analizando los resultados" ni listas con guiones. Tu respuesta debe EMPEZAR directamente con el carácter [ y TERMINAR con ]. Solo el array JSON, nada más. Si razonas internamente, hazlo en silencio y entrega únicamente el JSON final.`;
+${webStrategy}
 
-  // Búsqueda web (temas reales y frescos de los últimos 7 días)
+FORMATO DE SALIDA: SOLO un array JSON válido (sin backticks, sin texto antes ni después). Si no hay nada relevante, devuelve [].
+[{"ref":"r12 o null","title":"titular en español, máx. 13 palabras","why":"por qué importa (1 frase)","engagement":"hot|trending|normal","scope":"espana|global","tags":["t1","t2"],"angle":"ángulo de opinión (1 frase)","published":"texto legible ej. 'Hace 2 días' o '9 jun'","published_date":"AAAA-MM-DD","url":"URL real"}]
+- Para noticias de la lista: pon en "ref" su identificador exacto (ej. "r12"); puedes traducir el titular al español. URL y fecha se toman de la lista.
+- Para noticias de la búsqueda web: "ref": null, con URL real y "published_date" verificada.
+
+REGLA DE FORMATO CRÍTICA: NO expliques tu razonamiento. Tu respuesta debe EMPEZAR por [ y TERMINAR por ]. Solo el array JSON.`;
+
+  // Presupuesto de búsquedas web (solo se cobran las que realmente se usen)
+  const webSearchMaxUses = Math.min(6, Math.max(3, siteQueryGroups.length + 2));
+  // Tiempo restante hasta el límite de Vercel (60s), con margen para responder
+  const timeLeft = Math.max(20000, 56000 - (Date.now() - startedAt));
+
   try {
     const response = await axios.post('https://api.anthropic.com/v1/messages', {
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2500,
+      model: CLAUDE_MODEL,
+      max_tokens: 3000,
       tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: webSearchMaxUses }],
-      system: 'Eres un editor de contenido del sector audiovisual y streaming. Buscas noticias REALES y recientes con enlaces verificados. Empiezas SIEMPRE buscando dentro de las fuentes prioritarias del usuario (con site:) y luego complementas con búsqueda general. Devuelves hasta 8, ordenadas por relevancia, priorizando España/Portugal pero incluyendo globales relevantes. Nunca inventas URLs. FORMATO OBLIGATORIO: tu respuesta final debe ser ÚNICAMENTE un array JSON válido, empezando por [ y terminando por ]. NUNCA escribas tu razonamiento, análisis ni comentarios en la respuesta; todo ese trabajo hazlo internamente y entrega solo el JSON.',
+      system: 'Eres un editor de contenido del sector audiovisual y streaming. Seleccionas noticias REALES y recientes para que un experto independiente opine en LinkedIn. Usas primero las noticias de las fuentes del usuario (leídas de sus RSS) y solo recurres a la búsqueda web si con ellas no hay suficiente. Nunca inventas URLs ni fechas. FORMATO OBLIGATORIO: tu respuesta final debe ser ÚNICAMENTE un array JSON válido, empezando por [ y terminando por ]. Nunca escribas tu razonamiento en la respuesta.',
       messages: [{ role: 'user', content: userPrompt }]
-    }, { headers, timeout: 57000 });
+    }, { headers, timeout: timeLeft });
 
     const text = response.data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
+    const webSearchesUsed = (response.data.content || []).filter(b => b.type === 'server_tool_use').length;
     let topics = extractTopics(text);
     if (topics && topics.length) {
+      // Las noticias que vienen del RSS toman URL, fecha y medio de la propia fuente (no del modelo)
+      const poolById = new Map(pool.map(it => [it.id, it]));
+      topics = topics.map(t => {
+        const ref = t.ref ? poolById.get(String(t.ref).trim()) : null;
+        if (ref) {
+          return { ...t, url: ref.link, published_date: ref.date.slice(0, 10), published: humanDateEs(ref.date), source_name: ref.source, origin: 'rss' };
+        }
+        return { ...t, origin: 'web' };
+      });
       // FILTRO DE FRESCURA por código: descartar noticias de más de 7 días
-      const maxAgeMs = 7 * 24 * 60 * 60 * 1000;
       const nowMs = Date.now();
       const fresh = topics.filter(t => {
-        if (!t.published_date) return true; // si no hay fecha reconocible, no la descartamos aquí (el modelo ya la filtró)
+        if (!t.published_date) return t.origin === 'rss'; // una noticia web sin fecha verificable no entra
         const d = new Date(t.published_date);
-        if (isNaN(d.getTime())) return true; // fecha no parseable → no descartar por código
-        return (nowMs - d.getTime()) <= maxAgeMs;
+        if (isNaN(d.getTime())) return false;
+        return (nowMs - d.getTime()) <= RSS_MAX_AGE_MS + 24 * 3600 * 1000; // +1 día de margen por husos horarios
       });
       // ANTI-DUPLICADOS por código (red de seguridad): descartar títulos muy parecidos
-      const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+      const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
       const seen = [];
       const deduped = fresh.filter(t => {
         const words = norm(t.title).split(' ').filter(w => w.length > 3);
@@ -913,24 +1171,29 @@ REGLA DE FORMATO CRÍTICA: NO expliques tu razonamiento ni escribas análisis en
         return true;
       });
       const mapped = deduped.slice(0, 10).map(t => ({ ...t, source: 'web', scope: t.scope === 'global' ? 'global' : 'espana' }));
+      const stats = { rssFeeds: rssSources.length, rssFailed: failed.length, rssItems: pool.length, webSearches: webSearchesUsed };
+      console.log('search-topics stats:', JSON.stringify({ sector: sectorId || sector, ...stats, ms: Date.now() - startedAt }));
       if (mapped.length) {
         await persistSearch(sector, mapped, now);
-        return res.json({ topics: mapped, searchedAt: now, source: 'web' });
+        return res.json({ topics: mapped, searchedAt: now, source: 'web', stats });
       }
       // Todo lo encontrado era viejo → sin novedades frescas.
-      // DIAGNÓSTICO TEMPORAL: devolvemos también lo que la IA encontró y descartó (título + fecha
-      // que detectó), para poder ver en la propia app si el problema es de fechas mal detectadas
-      // o de contenido genuinamente antiguo. Quitar este bloque cuando quede claro el motivo.
+      // DIAGNÓSTICO: devolvemos también lo que la IA encontró y descartó (título + fecha detectada).
       const discarded = topics.slice(0, 10).map(t => ({ title: t.title, published: t.published, published_date: t.published_date || null }));
       console.error('all_old — descartadas:', JSON.stringify(discarded));
-      return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: 'all_old', debugDiscarded: discarded });
+      return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: 'all_old', debugDiscarded: discarded, stats });
+    }
+    if (topics && topics.length === 0) {
+      // La IA respondió correctamente pero no encontró nada relevante
+      return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: 'none_relevant',
+        stats: { rssFeeds: rssSources.length, rssFailed: failed.length, rssItems: pool.length, webSearches: webSearchesUsed } });
     }
     // La búsqueda respondió pero no pudimos extraer temas
     console.error('No topics parsed. Raw text (first 500):', text.slice(0, 500));
     return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: 'no_parse', debugRawText: text.slice(0, 800) });
   } catch (webErr) {
     const detail = webErr.response?.data?.error?.message || webErr.message;
-    console.error('Web search failed:', detail);
+    console.error('Search failed:', detail);
     const isTimeout = webErr.code === 'ECONNABORTED' || /timeout/i.test(detail || '');
     return res.json({ topics: [], searchedAt: now, source: 'web', empty: true, reason: isTimeout ? 'timeout' : 'error', detail });
   }
