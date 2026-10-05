@@ -64,6 +64,14 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .src-visit{font-size:11px;color:var(--blue);text-decoration:none;display:inline-flex;align-items:center;gap:3px}
 .src-visit:hover{text-decoration:underline}
 .src-del{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:13px;padding:0 4px}
+.src-rss{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--muted2);margin-bottom:10px}
+.rss-pill{padding:2px 8px;border-radius:20px;border:1px solid var(--border);white-space:nowrap}
+.rss-pill.ok{color:var(--green);border-color:rgba(46,204,113,.35)}.rss-pill.err{color:#e67e22;border-color:rgba(230,126,34,.35)}
+.rss-act{background:none;border:none;color:var(--blue);cursor:pointer;font-size:11px;padding:0 2px}
+.rss-detect-btn{margin-top:10px;background:transparent;color:var(--accent);border:1px solid var(--accent-border);border-radius:8px;padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:12.5px;font-weight:600;cursor:pointer}
+.rss-detect-btn:disabled{opacity:.6;cursor:wait}
+.rss-detect-msg{font-size:11.5px;color:var(--muted);margin-top:6px}
+.topic-origin{font-size:10.5px;color:var(--muted2);padding:2px 7px;border-radius:5px;border:1px solid var(--border);white-space:nowrap}
 .src-del:hover{color:var(--red)}
 .source-toggle{width:38px;height:21px;border-radius:11px;border:none;cursor:pointer;position:relative;flex-shrink:0;transition:background .2s}
 .source-toggle.on{background:var(--blue)}.source-toggle.off{background:var(--border2)}
@@ -386,7 +394,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="sector-tag" onclick="setSector(this,'media deals partnerships distribución OTT 2026','partnerships')"><span class="icon">🤝</span>Partnerships</div>
       </div>
       <div class="sec-label">Tu perfil</div>
-      <div class="profile-block"><textarea id="profileInput" rows="5">Affiliates & Business Development Sr. Manager en Paramount International. +15 años en estrategia multiplataforma. Especializado en OTT, FAST, SVOD, AVOD, partnerships de distribución en mercados europeo e iberoamericano.</textarea></div>
+      <div class="profile-block"><textarea id="profileInput" rows="5">Affiliates & Business Development Sr. Manager en el sector audiovisual internacional. +15 años en estrategia multiplataforma. Especializado en OTT, FAST, SVOD, AVOD, partnerships de distribución en mercados europeo e iberoamericano.</textarea></div>
     </div>
     <div class="sidebar-footer">
       <div class="cost-widget">
@@ -394,7 +402,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="cost-amount" id="costAmount">$0.00</div>
         <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
       </div>
-      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v3.4 · 18 sep 2026</span></div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v4.0 · 5 oct 2026</span></div>
     </div>
   </div>
   <div class="tab-view active" id="tab-discover">
@@ -409,7 +417,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
     <div class="sources-hero">
       <div class="sources-hero-left">
         <div class="sources-hero-title">🔗 Fuentes de búsqueda</div>
-        <div class="sources-hero-sub">Gestiona dónde busca la herramienta. Activa o desactiva fuentes y añade las tuyas propias. Las fuentes activas se priorizan al buscar tendencias.</div>
+        <div class="sources-hero-sub">Gestiona dónde busca la herramienta. Activa o desactiva fuentes y añade las tuyas propias. Las fuentes con <b>RSS</b> se leen directamente (noticias del día, con fecha exacta); las que no lo tienen se cubren con búsqueda web.</div><button class="rss-detect-btn" id="rssDetectBtn" onclick="detectAllRss()">📡 Detectar / comprobar RSS de las fuentes activas</button><div class="rss-detect-msg" id="rssDetectMsg"></div>
       </div>
       <div class="sources-hero-count"><span id="sourcesActiveCount">0</span><span class="sources-hero-total">/ <span id="sourcesTotalCount">0</span></span><div class="sources-hero-label">activas</div></div>
     </div>
@@ -501,7 +509,7 @@ let selectedTones=['opinionado'],currentLength=3,allTopics=[],currentDraftRaw=''
 function setLang(l,btn){currentLang=l;document.querySelectorAll('.lang-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
 let historyData2=[];
 // ── Gestión de fuentes ──
-const CAT_LABELS={medios:'📰 Medios especializados',sector:'📺 Sector audiovisual',tech:'⚙️ Tecnología y Ad Tech',general:'🌐 Generalistas',propias:'⭐ Fuentes propias'};
+const CAT_LABELS={medios:'📰 Medios especializados',sector:'📺 Sector audiovisual',tech:'⚙️ Tecnología y Ad Tech',general:'🌐 Generalistas',propias:'⭐ Fuentes propias',portugal:'🇵🇹 Portugal',perfiles:'👤 Perfiles de LinkedIn (no tienen RSS; se usan como referencia)'};
 // Categorías de búsqueda (mismas 6 que los botones de Descubrir). Sin ninguna marcada = la fuente aplica a todas.
 const SECTOR_CHIPS=[{id:'streaming',icon:'📺',label:'Streaming'},{id:'fast',icon:'📡',label:'FAST'},{id:'operadores',icon:'🔌',label:'Operadores'},{id:'contenido',icon:'🎬',label:'Contenido'},{id:'adtech',icon:'⚙️',label:'Ad Tech'},{id:'partnerships',icon:'🤝',label:'Partnerships'}];
 async function loadSources(){
@@ -515,7 +523,9 @@ async function loadSources(){
     // Agrupar por categoría
     const cats={};
     srcs.forEach(s=>{const c=s.category||'propias';(cats[c]=cats[c]||[]).push(s);});
-    const order=['medios','sector','tech','general','propias'];
+    // Orden fijo para las conocidas y, al final, cualquier otra categoría (antes se quedaban sin mostrar)
+    const order=['medios','sector','tech','general','propias','portugal','perfiles'];
+    Object.keys(cats).forEach(k=>{if(!order.includes(k))order.push(k);});
     let html='';
     order.forEach(cat=>{
       if(!cats[cat])return;
@@ -524,7 +534,7 @@ async function loadSources(){
         const visit=s.url?'<a href="https://'+s.url.replace(/^https?:\/\//,'')+'" target="_blank" rel="noopener" class="src-visit">Visitar ↗</a>':'<span></span>';
         const secs=Array.isArray(s.sectors)?s.sectors:[];
         const chips='<div class="src-sector-chips" title="Categorías de búsqueda en las que se usa esta fuente. Ninguna marcada = se usa en todas.">'+SECTOR_CHIPS.map(c=>'<button class="sector-chip'+(secs.includes(c.id)?' on':'')+'" onclick="toggleSourceSector('+s.id+',\''+c.id+'\',this)">'+c.icon+' '+c.label+'</button>').join('')+'</div>';
-        return '<div class="src-card'+(s.active?'':' inactive')+'"><div class="src-card-head"><div class="src-card-name">'+s.name+'</div><button class="source-toggle '+(s.active?'on':'off')+'" onclick="toggleSource('+s.id+','+(!s.active)+')"></button></div><div class="src-card-desc">'+(s.description||'Sin descripción')+'</div>'+chips+'<div class="src-card-foot">'+visit+'<button class="src-del" onclick="deleteSource('+s.id+')" title="Eliminar">🗑️</button></div></div>';
+        return '<div class="src-card'+(s.active?'':' inactive')+'"><div class="src-card-head"><div class="src-card-name">'+s.name+'</div><button class="source-toggle '+(s.active?'on':'off')+'" onclick="toggleSource('+s.id+','+(!s.active)+')"></button></div><div class="src-card-desc">'+(s.description||'Sin descripción')+'</div>'+chips+rssLine(s)+'<div class="src-card-foot">'+visit+'<button class="src-del" onclick="deleteSource('+s.id+')" title="Eliminar">🗑️</button></div></div>';
       }).join('');
       html+='</div>';
     });
@@ -546,6 +556,44 @@ async function addSource(){
 }
 async function toggleSource(id,active){
   try{await fetch('/api/sources/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({active})});loadSources();}catch(e){}
+}
+// ── RSS de las fuentes ──
+function rssLine(s){
+  if(!s.url||/linkedin\.com/i.test(s.url))return '';
+  let pill;
+  if(s.rss_status==='ok')pill='<span class="rss-pill ok" title="'+(s.rss_url||'').replace(/"/g,'&quot;')+'">📡 RSS ✓ '+(s.rss_items?('· '+s.rss_items+' noticias'):'')+'</span>';
+  else if(s.rss_status==='error')pill='<span class="rss-pill err" title="'+(s.rss_url||'').replace(/"/g,'&quot;')+'">⚠️ RSS no responde · usa búsqueda web</span>';
+  else if(s.rss_status==='sin_rss')pill='<span class="rss-pill">Sin RSS · usa búsqueda web</span>';
+  else if(s.rss_url)pill='<span class="rss-pill">📡 RSS sin comprobar</span>';
+  else pill='<span class="rss-pill">RSS sin detectar</span>';
+  return '<div class="src-rss">'+pill+'<button class="rss-act" onclick="editRss('+s.id+')">✏️ '+(s.rss_url?'Cambiar RSS':'Poner RSS a mano')+'</button><button class="rss-act" onclick="checkRss('+s.id+',this)">🔄 Comprobar</button></div>';
+}
+async function detectAllRss(){
+  const btn=document.getElementById('rssDetectBtn'),msg=document.getElementById('rssDetectMsg');
+  btn.disabled=true;msg.textContent='Comprobando las webs de tus fuentes... (puede tardar hasta 30s)';
+  try{
+    const r=await fetch('/api/sources/discover-rss',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    const d=await r.json();
+    if(!r.ok||!d.results)throw new Error(d.error||'error');
+    const okN=d.results.filter(x=>x.status==='ok').length;
+    msg.textContent='Listo: '+okN+' de '+d.results.length+' fuentes con RSS. Las demás se seguirán cubriendo con búsqueda web.';
+    loadSources();
+  }catch(e){msg.textContent='No se pudo completar la comprobación. Inténtalo de nuevo en un rato.';}
+  btn.disabled=false;
+}
+async function checkRss(id,btn){
+  btn.disabled=true;btn.textContent='⏳ Comprobando...';
+  try{await fetch('/api/sources/discover-rss',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[id]})});}catch(e){}
+  loadSources();
+}
+async function editRss(id){
+  const url=prompt('Pega la dirección del RSS de esta fuente (déjalo vacío para quitarlo y que se detecte solo):');
+  if(url===null)return;
+  try{
+    await fetch('/api/sources/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({rss_url:url.trim()})});
+    if(url.trim())await fetch('/api/sources/discover-rss',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[id]})});
+  }catch(e){}
+  loadSources();
 }
 async function toggleSourceSector(id,sectorId,btn){
   const card=btn.closest('.src-card');
@@ -1003,7 +1051,7 @@ function showLoading(t){document.getElementById('loadingText').textContent=t;doc
 function hideLoading(){document.getElementById('loadingOverlay').classList.remove('show');}
 async function fetchTopics(){
   const btn=document.getElementById('fetchBtn'),lbl=document.getElementById('fetchLabel');
-  btn.disabled=true;lbl.innerHTML='<span class="spinner"></span> Buscando...';showLoading('Buscando noticias reales de los últimos 7 días... (puede tardar hasta 45s)');
+  btn.disabled=true;lbl.innerHTML='<span class="spinner"></span> Buscando...';showLoading('Leyendo tus fuentes (RSS) y seleccionando lo relevante de los últimos 7 días... (puede tardar hasta 45s)');
   try{
     const r=await fetch('/api/search-topics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sector:currentSector,sectorId:currentSectorId})});
     const data=await r.json();
@@ -1013,6 +1061,8 @@ async function fetchTopics(){
       const disc=Array.isArray(data.debugDiscarded)?data.debugDiscarded:[];
       const discHtml=disc.length?('<details style="margin-top:14px;text-align:left;font-size:11.5px;color:var(--muted2)"><summary style="cursor:pointer;color:var(--muted)">Ver qué encontró y descartó (diagnóstico) · '+disc.length+'</summary><div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">'+disc.map(d=>'<div style="padding:6px 8px;border:1px solid var(--border);border-radius:6px"><b>'+(d.title||'(sin título)')+'</b><br>Fecha detectada: '+(d.published_date||'—')+(d.published?(' · "'+d.published+'"'):'')+'</div>').join('')+'</div></details>'):'';
       document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text"><b>Sin novedades de esta semana</b><br><br>Se encontraron noticias, pero todas tenían más de 7 días. Para LinkedIn no interesa contenido antiguo. Prueba otra temática o vuelve más tarde.'+discHtml+'</div></div>';
+    }else if(data.empty && data.reason==='none_relevant'){
+      document.getElementById('topicsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text"><b>Nada relevante esta semana en esta categoría</b><br><br>Se revisaron tus fuentes'+(data.stats?(' ('+data.stats.rssItems+' noticias recientes de '+data.stats.rssFeeds+' RSS'+(data.stats.webSearches?(' + '+data.stats.webSearches+' búsquedas web'):'')+')'):'')+', pero ninguna tenía lectura de negocio para esta categoría. Como no hubo resultados, no se ha gastado tu búsqueda de hoy: puedes probar otra categoría o volver más tarde.</div></div>';
     }else if(data.empty && (data.reason==='timeout'||data.reason==='error')){
       const c=document.getElementById('topicsContainer');
       c.innerHTML='<div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-text"><b>La búsqueda no respondió a tiempo</b><br><br>No es que no haya noticias — la búsqueda web se ha demorado o ha fallado. Pulsa "Actualizar" para reintentar (no consume tu límite de 24h).<br><br><span style="font-size:11px;color:var(--muted2)">'+(data.detail||data.reason)+'</span></div></div>';
@@ -1040,9 +1090,9 @@ function renderTopics(topics,searchedAt){
   const pm={x:{c:'pb-x',l:'𝕏 Twitter'},linkedin:{c:'pb-li',l:'in LinkedIn'},web:{c:'pb-web',l:'🌐 Web'},mixed:{c:'pb-web',l:'🔀 Multi'}};
   topics.forEach((t,i)=>{
     const card=document.createElement('div');card.className='topic-card';card.dataset.title=t.title||'';
-    const ec=em[t.engagement]?t.engagement:'normal',p=pm[t.platform]||pm.web;
+    const ec=em[t.engagement]?t.engagement:'normal',p=t.origin==='rss'?{c:'pb-web',l:'📡 RSS'}:(pm[t.platform]||pm.web);
     const scopeBadge=t.scope==='global'?'<span class="scope-badge scope-global">🌍 GLOBAL</span>':'<span class="scope-badge scope-es">🇪🇸 ESPAÑA</span>';
-    const pub=t.published?'<span class="topic-meta-item">🕐 '+t.published+'</span>':'';
+    const pub=(t.published?'<span class="topic-meta-item">🕐 '+t.published+'</span>':'')+(t.origin==='rss'?'<span class="topic-origin" title="Leída del RSS de tu fuente">📡 '+(t.source_name||'Tu fuente')+'</span>':'');
     let link='';
     if(t.source==='web' && t.url){
       link='<a href="'+t.url+'" target="_blank" rel="noopener" class="topic-link" onclick="event.stopPropagation()">🔗 Ver publicación</a>';
