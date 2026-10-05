@@ -73,6 +73,20 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .rss-detect-msg{font-size:11.5px;color:var(--muted);margin-top:6px}
 .emp-badge{font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:20px;background:rgba(230,126,34,.12);border:1px solid rgba(230,126,34,.4);color:#e67e22;white-space:nowrap}
 .emp-note{font-size:11.5px;color:#e67e22;background:rgba(230,126,34,.07);border:1px solid rgba(230,126,34,.25);border-radius:7px;padding:6px 9px;margin:6px 0}
+.src-tabs{display:flex;gap:4px;margin-bottom:8px}
+.src-tab{flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:7px;font-size:12px;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif}
+.src-tab.active{background:var(--accent-dim);border-color:var(--accent-border);color:var(--accent)}
+.idea-q{font-size:12px;color:var(--text);margin:8px 0 4px;line-height:1.45}
+.idea-link{background:none;border:none;color:var(--muted);font-size:11.5px;cursor:pointer;text-decoration:underline;padding:4px 0;font-family:'DM Sans',sans-serif}
+.voice-btn{width:100%;margin-top:8px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:8px;font-size:12px;color:var(--text);cursor:pointer;font-family:'DM Sans',sans-serif}
+.voice-btn:hover{border-color:var(--accent);color:var(--accent)}
+.voice-item{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;color:var(--muted);line-height:1.5;display:flex;gap:8px;align-items:flex-start;margin-bottom:6px}
+.voice-item span{flex:1;white-space:pre-wrap}
+.hooks-panel{background:var(--surface2);border:1px solid var(--border2);border-radius:9px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.hook-opt{text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:12px;color:var(--text);cursor:pointer;line-height:1.45;font-family:'DM Sans',sans-serif}
+.hook-opt:hover{border-color:var(--accent);color:var(--accent)}
+.link-place{display:flex;flex-direction:column;gap:5px;margin-top:8px;font-size:12px;color:var(--text)}
+.link-place label{display:flex;gap:7px;align-items:center;cursor:pointer}
 .topic-origin{font-size:10.5px;color:var(--muted2);padding:2px 7px;border-radius:5px;border:1px solid var(--border);white-space:nowrap}
 .src-del:hover{color:var(--red)}
 .source-toggle{width:38px;height:21px;border-radius:11px;border:none;cursor:pointer;position:relative;flex-shrink:0;transition:background .2s}
@@ -320,6 +334,19 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
     <div class="modal-error" id="editSchedError"></div>
   </div>
 </div>
+<div class="modal-overlay" id="voiceModal">
+  <div class="modal-box" style="width:520px;max-height:88vh;overflow-y:auto">
+    <div class="modal-title">🎙️ Mi estilo de escritura</div>
+    <div class="modal-sub">Pega aquí 3-5 posts tuyos de LinkedIn de los que estés contento. La IA los usa como referencia de tu voz (ritmo, frases, forma de abrir y cerrar) en todos los posts que genere. No copia su contenido. Se usan los 5 más recientes.</div>
+    <div id="voiceList"></div>
+    <textarea id="voiceNewText" class="modal-input" rows="6" placeholder="Pega aquí un post tuyo completo..." style="text-align:left;letter-spacing:0;resize:vertical;font-family:inherit;font-size:12.5px"></textarea>
+    <div class="modal-actions">
+      <button class="modal-btn modal-btn-cancel" onclick="closeVoiceModal()">Cerrar</button>
+      <button class="modal-btn modal-btn-confirm" onclick="addVoiceSample()">+ Guardar este post</button>
+    </div>
+    <div class="modal-error" id="voiceError"></div>
+  </div>
+</div>
 <div class="modal-overlay" id="publishModal">
   <div class="modal-box" style="width:440px">
     <div class="modal-title">👁️ Vista previa · Publicar o programar</div>
@@ -329,10 +356,14 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
     <div id="angleWarning" style="display:none"></div>
 
     <div class="pub-extra">
-      <label class="pub-extra-row"><input type="checkbox" id="includeLinkChk" onchange="toggleLinkField(this.checked)"> <span>🔗 Incluir enlace del artículo en el post</span></label>
+      <label class="pub-extra-row"><input type="checkbox" id="includeLinkChk" onchange="toggleLinkField(this.checked)"> <span>🔗 Añadir el enlace de la noticia</span></label>
       <div id="linkFieldWrap" style="display:none">
         <input type="text" id="publishLinkInput" class="modal-input" style="text-align:left;letter-spacing:0;margin-top:6px" placeholder="https://enlace-del-articulo.com">
-        <div class="pub-hint">⚠️ Un enlace en el cuerpo reduce el alcance ~18,8% (ver guía). Si lo incluyes, valóralo.</div>
+        <div class="link-place">
+          <label><input type="radio" name="linkPlace" value="comment" checked> 💬 En el primer comentario (recomendado)</label>
+          <label><input type="radio" name="linkPlace" value="post"> 📝 Dentro del post (reduce el alcance)</label>
+        </div>
+        <div class="pub-hint">ℹ️ Si LinkedIn no permite añadir el comentario automáticamente, el post se publica igual y te dejamos el enlace copiado para pegarlo tú.</div>
       </div>
     </div>
 
@@ -397,6 +428,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
       </div>
       <div class="sec-label">Tu perfil</div>
       <div class="profile-block"><textarea id="profileInput" rows="5">Affiliates & Business Development Sr. Manager en el sector audiovisual internacional. +15 años en estrategia multiplataforma. Especializado en OTT, FAST, SVOD, AVOD, partnerships de distribución en mercados europeo e iberoamericano.</textarea></div>
+      <button class="voice-btn" onclick="openVoiceModal()" title="Posts tuyos que la IA usa como referencia de estilo">🎙️ Mi estilo de escritura (<span id="voiceCount">0</span>)</button>
     </div>
     <div class="sidebar-footer">
       <div class="cost-widget">
@@ -404,7 +436,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="cost-amount" id="costAmount">$0.00</div>
         <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
       </div>
-      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v4.2 · 5 oct 2026</span></div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v5.0 · 5 oct 2026</span></div>
     </div>
   </div>
   <div class="tab-view active" id="tab-discover">
@@ -479,15 +511,28 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
       <div><div class="sec-label" style="margin-bottom:.6rem">Longitud</div>
         <div class="length-row"><input type="range" class="length-slider" id="lengthSlider" min="1" max="6" step="1" value="3" oninput="updateLength(this.value)"><span class="length-val" id="lengthLabel">1000 caracteres</span></div>
       </div>
-      <div><div class="sec-label" style="margin-bottom:.6rem">O genera desde tu propio enlace</div>
-        <input type="text" id="customUrl" class="src-input" placeholder="Pega una URL de noticia...">
-        <textarea id="customText" class="src-input" rows="2" placeholder="...o pega aquí el texto/titular (opcional)" style="resize:none"></textarea>
-        <button class="custom-gen-btn" onclick="generateFromCustom()" title="Coste estimado: ~$0.01-0.04">✨ Generar desde mi enlace/texto</button>
+      <div><div class="sec-label" style="margin-bottom:.6rem">O genera desde lo tuyo</div>
+        <div class="src-tabs">
+          <button class="src-tab active" id="srcTabLink" onclick="setSrcTab('link')">🔗 Enlace o texto</button>
+          <button class="src-tab" id="srcTabIdea" onclick="setSrcTab('idea')">💭 Idea propia</button>
+        </div>
+        <div id="srcPaneLink">
+          <input type="text" id="customUrl" class="src-input" placeholder="Pega una URL de noticia...">
+          <textarea id="customText" class="src-input" rows="2" placeholder="...o pega aquí el texto/titular (opcional)" style="resize:none"></textarea>
+          <button class="custom-gen-btn" onclick="generateFromCustom()" title="Coste estimado: ~$0.01-0.04">✨ Generar desde mi enlace/texto</button>
+        </div>
+        <div id="srcPaneIdea" style="display:none">
+          <textarea id="ideaText" class="src-input" rows="3" placeholder="¿Qué quieres contar? Escribe tu idea en 2-3 líneas. Ej.: 'Los canales FAST se están convirtiendo en el nuevo escaparate de catálogo, no en un negocio en sí'" style="resize:vertical"></textarea>
+          <div id="ideaQuestions"></div>
+          <button class="custom-gen-btn" id="ideaMainBtn" onclick="ideaNext()" title="Coste estimado: ~$0.01">Siguiente: 3 preguntas para afinar →</button>
+          <button class="idea-link" id="ideaSkipBtn" onclick="generateFromIdea(true)">o generar directamente, sin preguntas</button>
+        </div>
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:7px">
         <div class="sec-label">Borrador</div>
         <div class="draft-area" id="draftArea"><div class="draft-placeholder"><div class="draft-placeholder-icon">✍️</div><div class="draft-placeholder-text">Selecciona un tema y pulsa "Generar post"</div></div></div>
         <div class="char-row"><span id="charCount"></span><span id="charStatus"></span></div>
+        <div id="hooksPanel" style="display:none"></div>
       </div>
     </div>
     <div class="right-footer">
@@ -497,6 +542,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
       </div>
       <div class="action-row">
         <button class="copy-btn" style="flex:1" onclick="copyDraft()" title="Copiar el texto al portapapeles">📋 Copiar</button>
+        <button class="icon-btn" onclick="showHooks()" title="Proponer 5 primeras líneas alternativas · Coste estimado: ~$0.01">🎣 Ganchos</button>
         <button class="icon-btn" onclick="regenDraft()" title="Generar otra versión del mismo post · Coste estimado: ~$0.01">🔄 Regenerar</button>
       </div>
     </div>
@@ -507,6 +553,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 <script>
 let currentSector='streaming SVOD Netflix Disney HBO 2026';
 let currentSectorId='streaming';
+let currentArticleUrl='',appInitialized=false,lastSourceWasIdea=false;
 let selectedTones=['opinionado'],currentLength=3,allTopics=[],currentDraftRaw='',lastTopicIdx=null,isConnected=false,generating=false,currentLang='es',includeLink=false,attachedImage=null;
 function setLang(l,btn){currentLang=l;document.querySelectorAll('.lang-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
 let historyData2=[];
@@ -672,9 +719,9 @@ async function tryUnlock(){
     if(d.ok){
       document.getElementById('lockScreen').style.display='none';
       document.getElementById('app').style.display='flex';
-      initApp();
+      if(!appInitialized)initApp();
     }else{
-      err.textContent='Código incorrecto o caducado';
+      err.textContent=d.error==='too_many_attempts'?(d.detail||'Demasiados intentos. Espera unos minutos.'):'Código incorrecto o caducado';
       document.getElementById('lockInput').value='';
     }
   }catch(e){err.textContent='Error de conexión';}
@@ -804,7 +851,8 @@ function openPublishModal(mode){
   includeLink=false;attachedImage=null;angleAcknowledged=false;slotAcknowledged=false;
   document.getElementById('includeLinkChk').checked=false;
   document.getElementById('linkFieldWrap').style.display='none';
-  document.getElementById('publishLinkInput').value='';
+  document.getElementById('publishLinkInput').value=currentArticleUrl||'';
+  document.querySelectorAll('input[name=linkPlace]').forEach(r=>r.checked=(r.value==='comment'));
   document.getElementById('includeImageChk').checked=false;
   document.getElementById('imageFieldWrap').style.display='none';
   document.getElementById('angleWarning').style.display='none';
@@ -928,9 +976,14 @@ function proceedDespiteSlot(){
   document.getElementById('angleWarning').style.display='none';
   confirmPublish();
 }
+function linkPlacement(){const r=document.querySelector('input[name=linkPlace]:checked');return r?r.value:'comment';}
+function linkForComment(){
+  if(!includeLink||linkPlacement()!=='comment')return '';
+  return (document.getElementById('publishLinkInput').value||'').trim();
+}
 function buildFinalText(){
   let text=currentDraftRaw;
-  if(includeLink){
+  if(includeLink&&linkPlacement()==='post'){
     const link=(document.getElementById('publishLinkInput').value||'').trim();
     if(link)text=text+'\n\n'+link;
   }
@@ -943,7 +996,7 @@ async function doPublishOrSchedule(pass,schedDate,err){
     // Programar
     showLoading('Programando publicación...');
     try{
-      const r=await fetch('/api/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:finalText,scheduledAt:schedDate,code:pass})});
+      const r=await fetch('/api/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:finalText,scheduledAt:schedDate,code:pass,firstComment:linkForComment()||undefined})});
       const d=await r.json();hideLoading();
       if(d.ok){closePublishModal();alert('✅ Post programado para '+fmtDate(schedDate)+(attachedImage?'\n\n📎 Nota: la imagen no se adjunta en posts programados todavía; súbela a mano cuando salga.':''));loadScheduled();}
       else if(d.error==='wrong_code'){err.textContent='Código incorrecto o caducado';}
@@ -954,10 +1007,21 @@ async function doPublishOrSchedule(pass,schedDate,err){
     showLoading(attachedImage?'Subiendo imagen y publicando...':'Publicando en LinkedIn...');
     try{
       const body={text:finalText,code:pass};
+      const fc=linkForComment();if(fc)body.firstComment=fc;
       if(attachedImage&&attachedImage.dataUrl)body.image=attachedImage.dataUrl;
       const r=await fetch('/api/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const d=await r.json();hideLoading();
-      if(d.ok){closePublishModal();alert('✅ ¡Publicado en LinkedIn!'+(d.withImage?' 🖼️ Con imagen incluida.':''));}
+      if(d.ok){
+        closePublishModal();
+        let msg='✅ ¡Publicado en LinkedIn!'+(d.withImage?' 🖼️ Con imagen incluida.':'');
+        if(d.comment&&d.comment.ok)msg+='\n💬 Enlace añadido como primer comentario.';
+        alert(msg);
+        if(d.comment&&!d.comment.ok&&fc){
+          try{await navigator.clipboard.writeText(fc);}catch(e){}
+          const postUrl=d.linkedinId?'https://www.linkedin.com/feed/update/'+d.linkedinId:'https://www.linkedin.com/in/borjaph/recent-activity/all/';
+          if(confirm('💬 LinkedIn no ha permitido añadir el comentario automáticamente.\n\nEl enlace ya está copiado: pégalo tú como primer comentario.\n\n¿Abrir el post ahora?'))window.open(postUrl,'_blank');
+        }
+      }
       else if(d.error==='wrong_code'){err.textContent='Código incorrecto o caducado';}
       else if(d.error==='image_upload_failed'){err.textContent='No se pudo subir la imagen. El texto no se ha publicado. Revisa el formato/tamaño e inténtalo de nuevo.';}
       else{err.textContent=d.error||'No se pudo publicar';}
@@ -1159,7 +1223,7 @@ async function generateDraft(idx,e){
   showLoading('Redactando con tu voz...');
   try{
     const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,profile:document.getElementById('profileInput').value,tones:selectedTones,length:LEN[currentLength].k,lang:currentLang})});
-    const d=await r.json();currentDraftRaw=d.text||'Error.';
+    const d=await r.json();currentDraftRaw=d.text||'Error.';currentArticleUrl=d.articleUrl||topic.url||'';lastSourceWasIdea=false;
     renderDraftArea(currentDraftRaw);
     document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
     const st=document.getElementById('charStatus');st.textContent='✓ Listo';st.style.color='var(--green)';
@@ -1167,7 +1231,11 @@ async function generateDraft(idx,e){
   }catch(e){da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon">⚠️</div><div class="draft-placeholder-text">Error al generar.</div></div>';}
   hideLoading();generating=false;
 }
-function regenDraft(){if(lastTopicIdx!==null)generateDraft(lastTopicIdx,null);}
+function regenDraft(){
+  if(lastTopicIdx!==null){generateDraft(lastTopicIdx,null);return;}
+  // Si el último borrador salió de una idea propia, se vuelve a redactar con la misma idea y respuestas
+  if(document.getElementById('ideaText').value.trim()&&lastSourceWasIdea)generateFromIdea(!ideaQuestions.length);
+}
 async function generateFromCustom(){
   const url=document.getElementById('customUrl').value.trim();
   const text=document.getElementById('customText').value.trim();
@@ -1178,7 +1246,7 @@ async function generateFromCustom(){
   showLoading(url?'Leyendo tu enlace y redactando...':'Redactando desde tu texto...');
   try{
     const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile:document.getElementById('profileInput').value,tones:selectedTones,length:LEN[currentLength].k,lang:currentLang,customSource:{url,text}})});
-    const d=await r.json();currentDraftRaw=d.text||'Error.';
+    const d=await r.json();currentDraftRaw=d.text||'Error.';currentArticleUrl=d.articleUrl||url||'';
     if(d.error){da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon">⚠️</div><div class="draft-placeholder-text">Error: '+(d.detail||d.error)+'</div></div>';}
     else{
       renderDraftArea(currentDraftRaw);
@@ -1192,7 +1260,129 @@ async function generateFromCustom(){
   }catch(e){da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon">⚠️</div><div class="draft-placeholder-text">Error al generar.</div></div>';}
   hideLoading();generating=false;
 }
+// ── Pestañas Enlace / Idea propia ──
+function setSrcTab(t){
+  document.getElementById('srcTabLink').classList.toggle('active',t==='link');
+  document.getElementById('srcTabIdea').classList.toggle('active',t==='idea');
+  document.getElementById('srcPaneLink').style.display=t==='link'?'block':'none';
+  document.getElementById('srcPaneIdea').style.display=t==='idea'?'block':'none';
+}
+// ── Modo Idea propia: idea → 3 preguntas → post ──
+let ideaQuestions=[];
+async function ideaNext(){
+  const idea=document.getElementById('ideaText').value.trim();
+  if(!idea){alert('Escribe primero tu idea en 2-3 líneas.');return;}
+  if(ideaQuestions.length){generateFromIdea(false);return;} // segunda pulsación: generar
+  showLoading('Preparando 3 preguntas para afinar tu idea...');
+  try{
+    const r=await fetch('/api/idea-questions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idea})});
+    const d=await r.json();
+    if(!r.ok||!d.questions){throw new Error(d.error||'error');}
+    ideaQuestions=d.questions;
+    const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    document.getElementById('ideaQuestions').innerHTML='<div class="pub-hint" style="margin:2px 0 4px">Responde con lo que sepas: cuanto más concreto, más tuyo sonará el post. Puedes dejar alguna en blanco.</div>'
+      +ideaQuestions.map((q,i)=>'<div class="idea-q">'+(i+1)+'. '+esc(q)+'</div><textarea class="src-input" id="ideaAns'+i+'" rows="2" style="resize:vertical"></textarea>').join('');
+    document.getElementById('ideaMainBtn').textContent='✨ Generar post con mis respuestas';
+    document.getElementById('ideaSkipBtn').textContent='o cambiar de idea y empezar de nuevo';
+    document.getElementById('ideaSkipBtn').onclick=resetIdea;
+  }catch(e){alert('No se pudieron preparar las preguntas. Puedes generar directamente.');}
+  hideLoading();
+}
+function resetIdea(){
+  ideaQuestions=[];
+  document.getElementById('ideaQuestions').innerHTML='';
+  document.getElementById('ideaMainBtn').textContent='Siguiente: 3 preguntas para afinar →';
+  const sk=document.getElementById('ideaSkipBtn');sk.textContent='o generar directamente, sin preguntas';sk.onclick=()=>generateFromIdea(true);
+}
+async function generateFromIdea(skip){
+  const idea=document.getElementById('ideaText').value.trim();
+  if(!idea){alert('Escribe primero tu idea en 2-3 líneas.');return;}
+  if(generating)return;generating=true;
+  const answers=skip?[]:ideaQuestions.map((q,i)=>({q,a:(document.getElementById('ideaAns'+i)?.value||'').trim()}));
+  const da=document.getElementById('draftArea');
+  da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon"><span class="spinner" style="border-top-color:var(--accent);border-color:var(--border2);width:20px;height:20px"></span></div><div class="draft-placeholder-text" style="margin-top:8px">Redactando desde tu idea...</div></div>';
+  showLoading('Redactando desde tu idea, con tu voz...');
+  try{
+    const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile:document.getElementById('profileInput').value,tones:selectedTones,length:LEN[currentLength].k,lang:currentLang,customSource:{idea,answers}})});
+    const d=await r.json();
+    if(!r.ok||d.error||!d.text){da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon">⚠️</div><div class="draft-placeholder-text">Error: '+(d.detail||d.error||'no se pudo generar')+'</div></div>';}
+    else{
+      currentDraftRaw=d.text;currentArticleUrl='';lastTopicIdx=null;lastSourceWasIdea=true;
+      renderDraftArea(currentDraftRaw);
+      document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
+      const st=document.getElementById('charStatus');st.textContent='✓ Listo';st.style.color='var(--green)';
+      document.getElementById('pubBtn').disabled=!isConnected;document.getElementById('schedBtn').disabled=!isConnected;
+      addUsage('post');
+      saveDraftToHistory(currentDraftRaw,{title:'💭 Idea: '+idea.slice(0,70)+(idea.length>70?'…':''),url:null},'idea');
+    }
+  }catch(e){da.innerHTML='<div class="draft-placeholder"><div class="draft-placeholder-icon">⚠️</div><div class="draft-placeholder-text">Error al generar.</div></div>';}
+  hideLoading();generating=false;
+}
+// ── Generador de ganchos ──
+async function showHooks(){
+  if(!currentDraftRaw){alert('Genera o retoma un borrador primero.');return;}
+  const hp=document.getElementById('hooksPanel');
+  showLoading('Buscando 5 ganchos alternativos...');
+  try{
+    const r=await fetch('/api/hooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:currentDraftRaw,lang:currentLang})});
+    const d=await r.json();
+    if(!r.ok||!d.hooks)throw new Error(d.error||'error');
+    window._hooks=d.hooks;
+    const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    hp.innerHTML='<div class="sec-label" style="margin:0">🎣 Elige una primera línea (sustituye la actual)</div>'
+      +d.hooks.map((h,i)=>'<button class="hook-opt" onclick="applyHook('+i+')">'+esc(h)+'</button>').join('')
+      +'<button class="idea-link" onclick="document.getElementById(\'hooksPanel\').style.display=\'none\'">Cerrar sin cambiar</button>';
+    hp.style.display='block';
+    hp.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }catch(e){alert('No se pudieron generar ganchos ahora. Inténtalo de nuevo.');}
+  hideLoading();
+}
+function applyHook(i){
+  const h=(window._hooks||[])[i];if(!h)return;
+  const lines=currentDraftRaw.split('\n');
+  const first=lines.findIndex(l=>l.trim());
+  if(first<0)lines.unshift(h);else lines[first]=h;
+  currentDraftRaw=lines.join('\n');
+  renderDraftArea(currentDraftRaw);
+  document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
+  const st=document.getElementById('charStatus');st.textContent='✓ Gancho cambiado';st.style.color='var(--blue)';
+}
+// ── Mi estilo de escritura ──
+async function loadVoiceCount(){
+  try{const r=await fetch('/api/voice-samples');const rows=await r.json();document.getElementById('voiceCount').textContent=Array.isArray(rows)?rows.length:0;return rows;}catch(e){return [];}
+}
+async function openVoiceModal(){
+  document.getElementById('voiceError').textContent='';
+  document.getElementById('voiceModal').classList.add('show');
+  await renderVoiceList();
+}
+function closeVoiceModal(){document.getElementById('voiceModal').classList.remove('show');}
+async function renderVoiceList(){
+  const rows=await loadVoiceCount();
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  document.getElementById('voiceList').innerHTML=(rows&&rows.length)
+    ?rows.map((v,i)=>'<div class="voice-item"><span>'+(i<5?'✅ ':'⏸️ ')+esc(v.text.slice(0,220))+(v.text.length>220?'…':'')+'</span><button class="src-del" onclick="deleteVoiceSample('+v.id+')" title="Borrar">🗑️</button></div>').join('')
+    :'<div class="banner" style="margin-bottom:10px">Aún no has guardado ningún post. Mientras tanto, la IA usa el estilo genérico de analista del sector.</div>';
+}
+async function addVoiceSample(){
+  const ta=document.getElementById('voiceNewText'),err=document.getElementById('voiceError');
+  err.textContent='';
+  const text=ta.value.trim();
+  if(text.length<80){err.textContent='Pega un post completo (al menos 80 caracteres).';return;}
+  try{
+    const r=await fetch('/api/voice-samples',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+    const d=await r.json();
+    if(!r.ok){err.textContent=d.error||'No se pudo guardar';return;}
+    ta.value='';await renderVoiceList();
+  }catch(e){err.textContent='Error al guardar';}
+}
+async function deleteVoiceSample(id){
+  if(!confirm('¿Borrar este post de tu estilo?'))return;
+  try{await fetch('/api/voice-samples/'+id,{method:'DELETE'});}catch(e){}
+  await renderVoiceList();
+}
 function renderDraftArea(text){
+  const hp=document.getElementById('hooksPanel');if(hp){hp.style.display='none';hp.innerHTML='';}
   const da=document.getElementById('draftArea');
   da.innerHTML='<textarea class="draft-edit-textarea" id="draftEditArea" spellcheck="false"></textarea>';
   const ta=document.getElementById('draftEditArea');
@@ -1246,7 +1436,7 @@ function resumeDraft(id){
   const row=(window._draftHistCache||[]).find(d=>d.id===id);
   if(!row)return;
   // 1. Cargar el texto en la caja de borrador (editable)
-  currentDraftRaw=row.draft_text||'';
+  currentDraftRaw=row.draft_text||'';currentArticleUrl=(row.topic&&row.topic.url)||'';
   renderDraftArea(currentDraftRaw);
   document.getElementById('charCount').textContent=currentDraftRaw.length+' caracteres';
   const st=document.getElementById('charStatus');if(st){st.textContent='↩️ Retomado';st.style.color='var(--blue)';}
@@ -1372,7 +1562,9 @@ async function loadTips(){
   }catch(e){c.innerHTML='<div class="empty-state"><div class="empty-text">Conecta LinkedIn para ver tips.</div></div>';}
 }
 function initApp(){
+  appInitialized=true;
   checkAuth();
+  loadVoiceCount();
   fillCostMonths();renderCost();
   loadHistoryFromDB();
   loadSources();
@@ -1389,17 +1581,42 @@ function setupImageDrop(){
     if(file){document.getElementById('publishImageInput').files=e.dataTransfer.files;onImagePicked({target:{files:[file]}});}
   });
 }
-// Si volvemos de conectar LinkedIn, saltamos el lock (ya estaba desbloqueado antes)
-if(window.location.search.includes('connected=true')){
-  document.getElementById('lockScreen').style.display='none';
-  document.getElementById('app').style.display='flex';
-  initApp();
-  setTimeout(checkAuth,500);
-  history.replaceState({},'','/');
-}else{
-  // Mostrar pantalla de bloqueo y enfocar el campo
-  setTimeout(()=>document.getElementById('lockInput')?.focus(),100);
+// ── Sesión segura: si cualquier llamada responde "sesión caducada", se vuelve a pedir el código ──
+const _origFetch=window.fetch.bind(window);
+window.fetch=async(...args)=>{
+  const r=await _origFetch(...args);
+  if(r.status===401){
+    try{const d=await r.clone().json();if(d&&d.error==='session_required')showLockAgain();}catch(e){}
+  }
+  return r;
+};
+function showLockAgain(){
+  hideLoading();
+  const ls=document.getElementById('lockScreen');
+  if(ls.style.display==='none'||!ls.style.display){
+    ls.style.display='flex';
+    document.getElementById('lockError').textContent='Tu sesión ha caducado. Vuelve a introducir el código.';
+    document.getElementById('lockInput').value='';
+    setTimeout(()=>document.getElementById('lockInput')?.focus(),100);
+  }
 }
+// Al volver de conectar LinkedIn: solo se salta la pantalla si la sesión segura sigue viva
+(async()=>{
+  const back=window.location.search.includes('connected=true');
+  if(back)history.replaceState({},'','/');
+  if(back){
+    try{
+      const r=await _origFetch('/api/session');const d=await r.json();
+      if(d.ok){
+        document.getElementById('lockScreen').style.display='none';
+        document.getElementById('app').style.display='flex';
+        initApp();setTimeout(checkAuth,500);
+        return;
+      }
+    }catch(e){}
+  }
+  setTimeout(()=>document.getElementById('lockInput')?.focus(),100);
+})();
 </script>
 </body>
 </html>
