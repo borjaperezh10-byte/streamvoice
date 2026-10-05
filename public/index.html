@@ -297,7 +297,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
     <div class="lock-logo">SV</div>
     <div class="lock-title">Stream<span>Voice</span></div>
     <div class="lock-sub">🔐 Introduce el código de tu app de autenticación</div>
-    <input type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" class="lock-input" id="lockInput" placeholder="Código de 6 dígitos" style="text-align:center;letter-spacing:6px;font-size:20px" oninput="this.value=this.value.replace(/\D/g,'')" onkeydown="if(event.key==='Enter')tryUnlock()">
+    <input type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" class="lock-input" id="lockInput" placeholder="Código de 6 dígitos" style="text-align:center;letter-spacing:6px;font-size:20px" oninput="this.value=this.value.replace(/\D/g,'');if(this.value.length===6)tryUnlock()" onkeydown="if(event.key==='Enter')tryUnlock()">
     <button class="lock-btn" onclick="tryUnlock()">Entrar</button>
     <div class="lock-error" id="lockError"></div>
   </div>
@@ -402,7 +402,7 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="cost-amount" id="costAmount">$0.00</div>
         <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
       </div>
-      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v4.0 · 5 oct 2026</span></div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v4.1 · 5 oct 2026</span></div>
     </div>
   </div>
   <div class="tab-view active" id="tab-discover">
@@ -656,11 +656,14 @@ async function checkAuth(){
 }
 function connectLinkedIn(){window.location.href='/api/auth/linkedin';}
 // ── Seguridad de acceso ──
+let unlocking=false; // evita enviar el código dos veces (auto-envío + Enter/botón)
 async function tryUnlock(){
+  if(unlocking)return;
   const code=document.getElementById('lockInput').value.trim();
   const err=document.getElementById('lockError');
   err.textContent='';
   if(code.length!==6){err.textContent='Introduce el código de 6 dígitos';return;}
+  unlocking=true;
   try{
     const r=await fetch('/api/access',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
     const d=await r.json();
@@ -673,6 +676,7 @@ async function tryUnlock(){
       document.getElementById('lockInput').value='';
     }
   }catch(e){err.textContent='Error de conexión';}
+  finally{unlocking=false;}
 }
 // ── Punto 6: enlace e imagen opcionales ──
 function toggleLinkField(on){
