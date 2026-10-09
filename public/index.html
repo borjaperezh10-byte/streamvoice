@@ -305,6 +305,81 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
 .sched-main-btn{flex:1;background:var(--surface2);border:1px solid var(--accent-border);border-radius:7px;padding:10px;color:var(--accent);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:6px}
 .sched-main-btn:hover{background:var(--accent-dim)}
 .sched-main-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ═════════ RESPONSIVE ═════════ */
+.mobile-nav{display:none}
+#mobileSectorSlot{display:none}
+/* Portátiles y tablets en horizontal: columnas algo más estrechas y pestañas que no se pisan con el logo */
+@media (max-width:1180px){
+  .body{grid-template-columns:210px 1fr 330px}
+  .header-center{position:static;transform:none;flex:0 1 auto;min-width:0;justify-content:flex-start;overflow-x:auto;scrollbar-width:none;margin:0 10px;gap:4px}
+  .header-center::-webkit-scrollbar{display:none}
+  .nav-tab{white-space:nowrap;flex-shrink:0;padding:5px 9px;font-size:11.5px}
+  .li-connected{white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis;display:block}
+}
+/* Móvil y tablet en vertical: una sola pantalla a la vez + barra inferior */
+@media (max-width:900px){
+  html,body{height:100%}
+  .app{height:100vh;height:100dvh}
+  header{height:auto;padding:8px 12px 0;flex-wrap:wrap;row-gap:6px;column-gap:8px}
+  .logo-mark{width:28px;height:28px;font-size:11px}
+  .logo-name{font-size:16px}
+  #liStatus{margin-left:auto}
+  .li-connect-btn{padding:6px 12px;font-size:12px}
+  .li-connected{font-size:11px;padding:4px 10px;max-width:46vw;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .li-disconnect-btn{display:none}
+  .header-center{order:3;width:100%;flex:0 0 100%;justify-content:flex-start;margin:0 -12px;padding:0 12px 8px;gap:6px}
+  .nav-tab{padding:7px 12px;font-size:12.5px;border-color:var(--border)}
+  .body{display:block;position:relative;flex:1;min-height:0}
+  .body>.sidebar,.body>.right-panel,.body>.tab-view,.body>.tab-view.active{display:none}
+  body.m-view-news .body>.tab-view.active{display:flex;height:100%}
+  body.m-view-editor .body>.right-panel{display:flex;height:100%;border-left:none}
+  body.m-view-more .body>.sidebar{display:flex;height:100%;border-right:none}
+  .tab-view{padding:1rem 12px 1.25rem}
+  .right-scroll{padding:1rem 12px}
+  .right-footer{padding:10px 12px}
+  .sidebar-scroll{padding:1rem 12px}
+  /* Temáticas como fila de chips arriba de Descubrir */
+  #mobileSectorSlot{display:block;margin:-2px -12px 2px}
+  #mobileSectorSlot .sector-list{flex-direction:row;overflow-x:auto;gap:6px;margin:0;padding:0 12px 4px;scrollbar-width:none}
+  #mobileSectorSlot .sector-list::-webkit-scrollbar{display:none}
+  #mobileSectorSlot .sector-tag{white-space:nowrap;flex-shrink:0;border-color:var(--border);padding:7px 11px}
+  /* Barra inferior */
+  .mobile-nav{display:flex;flex-shrink:0;background:var(--surface);border-top:1px solid var(--border);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+  .m-nav-btn{flex:1;background:none;border:none;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px;border-radius:8px;cursor:pointer;position:relative}
+  .m-nav-btn .ic{font-size:19px;line-height:1}
+  .m-nav-btn.active{color:var(--accent);background:var(--accent-dim)}
+  .m-nav-btn .dot{position:absolute;top:5px;right:calc(50% - 16px);width:8px;height:8px;border-radius:50%;background:var(--accent);display:none}
+  .m-nav-btn.has-draft .dot{display:block}
+  /* Contenidos */
+  .toolbar{gap:6px}
+  .toolbar .btn-primary{flex:1 1 100%;justify-content:center;padding:11px}
+  .search-wrap{max-width:none;flex:1 1 140px}
+  .history-select{max-width:none;flex:1 1 140px}
+  .topic-card{padding:12px}
+  .topic-header{flex-direction:column;gap:6px}
+  .topic-footer{flex-wrap:wrap}
+  .gen-btn{padding:9px 16px;font-size:13px}
+  .topic-meta-row{gap:8px}
+  .sources-hero{flex-direction:column;align-items:flex-start;padding:1.1rem}
+  .sources-hero-count{text-align:left}
+  .src-grid{grid-template-columns:1fr}
+  .guide-card{overflow-x:auto}
+  .slot-table{min-width:420px}
+  .draft-area{max-height:none;min-height:38vh}
+  .action-row{flex-wrap:wrap}
+  .action-row .icon-btn,.action-row .copy-btn{flex:1 1 auto}
+  /* Ventanas emergentes a pantalla de móvil */
+  .modal-overlay{align-items:flex-end}
+  .modal-box{width:100%!important;max-width:100%!important;max-height:92vh;overflow-y:auto;border-radius:16px 16px 0 0;padding:1.25rem 1rem calc(1rem + env(safe-area-inset-bottom))}
+  .modal-actions{position:sticky;bottom:-1px;background:var(--surface);padding-top:8px}
+  .lock-box{padding:2rem 1.25rem}
+  /* iPhone hace zoom si el texto de un campo es menor de 16px */
+  input,textarea,select,.draft-edit-textarea,.lock-input,.modal-input,.src-input{font-size:16px!important}
+  .li-preview-card{padding:12px}
+  .li-preview-edit-hint{margin:8px 0 12px}
+  .modal-input::placeholder{letter-spacing:0}
+}
 </style>
 </head>
 <body>
@@ -436,10 +511,11 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
         <div class="cost-amount" id="costAmount">$0.00</div>
         <div class="cost-detail" id="costDetail">0 búsquedas · 0 posts</div>
       </div>
-      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v5.2 · 5 oct 2026</span></div>
+      <div class="credit">Creado por <span>Borja Pérez Herraiz</span><br><span class="version-tag">v5.3 · 9 oct 2026</span></div>
     </div>
   </div>
   <div class="tab-view active" id="tab-discover">
+    <div id="mobileSectorSlot"></div>
     <div class="toolbar">
       <button class="btn btn-primary" id="fetchBtn" onclick="fetchTopics()" title="Coste estimado: ~$0.04 por búsqueda (usa búsqueda web en tiempo real)"><span id="fetchLabel">🔍 Buscar tendencias</span></button>
       <div class="search-wrap"><span class="search-icon">🔎</span><input type="text" placeholder="Filtrar..." oninput="filterTopics(this.value)"></div>
@@ -548,6 +624,11 @@ header{height:58px;background:var(--surface);border-bottom:1px solid var(--borde
     </div>
   </div>
 </div>
+<nav class="mobile-nav" aria-label="Navegación móvil">
+  <button class="m-nav-btn active" id="mNavNews" onclick="setMobileView('news')"><span class="ic">📰</span>Noticias</button>
+  <button class="m-nav-btn" id="mNavEditor" onclick="setMobileView('editor')"><span class="dot"></span><span class="ic">✍️</span>Escribir</button>
+  <button class="m-nav-btn" id="mNavMore" onclick="setMobileView('more')"><span class="ic">☰</span>Perfil</button>
+</nav>
 </div>
 <div class="loading-overlay" id="loadingOverlay"><div class="loading-spinner"></div><div class="loading-text" id="loadingText">Cargando...</div></div>
 <script>
@@ -1560,6 +1641,48 @@ async function loadTips(){
     c.innerHTML=(d.tips||[]).map(t=>'<div class="tip-card"><div class="tip-header"><span style="font-size:18px">'+t.icon+'</span><span class="tip-title">'+t.title+'</span><span class="tip-priority tp-'+t.priority+'">'+(t.priority==='high'?'Alta':t.priority==='medium'?'Media':'Baja')+'</span></div><div class="tip-body">'+t.body+'</div></div>').join('');
   }catch(e){c.innerHTML='<div class="empty-state"><div class="empty-text">Conecta LinkedIn para ver tips.</div></div>';}
 }
+
+// ═════════ MÓVIL: una pantalla a la vez (Noticias / Escribir / Perfil) ═════════
+const mobileMQ=window.matchMedia('(max-width:900px)');
+function isMobile(){return mobileMQ.matches;}
+function setMobileView(v){
+  document.body.classList.remove('m-view-news','m-view-editor','m-view-more');
+  document.body.classList.add('m-view-'+v);
+  [['news','mNavNews'],['editor','mNavEditor'],['more','mNavMore']].forEach(([k,id])=>{const b=document.getElementById(id);if(b)b.classList.toggle('active',k===v);});
+  if(v==='editor'){const b=document.getElementById('mNavEditor');if(b)b.classList.remove('has-draft');}
+}
+// Las temáticas viven en el menú lateral; en móvil se colocan como chips encima de las noticias
+const _sectorList=document.querySelector('.sidebar .sector-list');
+const _sectorHome={parent:_sectorList?_sectorList.parentNode:null,next:_sectorList?_sectorList.nextSibling:null};
+const _sectorLabel=_sectorList?_sectorList.previousElementSibling:null;
+function placeSectors(){
+  if(!_sectorList)return;
+  if(isMobile()){
+    document.getElementById('mobileSectorSlot').appendChild(_sectorList);
+    if(_sectorLabel)_sectorLabel.style.display='none';
+  }else{
+    _sectorHome.parent.insertBefore(_sectorList,_sectorHome.next);
+    if(_sectorLabel)_sectorLabel.style.display='';
+  }
+}
+if(mobileMQ.addEventListener)mobileMQ.addEventListener('change',placeSectors);else mobileMQ.addListener(placeSectors);
+placeSectors();
+setMobileView('news');
+// Al cambiar de pestaña arriba, se muestra su contenido
+const _showTabDesktop=showTab;
+showTab=function(t,el){_showTabDesktop(t,el);if(isMobile())setMobileView('news');};
+// Al generar desde una noticia, saltar a la pantalla de escritura
+const _generateDraftDesktop=generateDraft;
+generateDraft=function(idx,e){
+  if(isMobile()&&e){setMobileView('editor');setTimeout(()=>{const da=document.getElementById('draftArea');if(da)da.scrollIntoView({block:'start'});},50);}
+  return _generateDraftDesktop(idx,e);
+};
+// Retomar un borrador: ir directamente a escribir
+const _resumeDraftDesktop=resumeDraft;
+resumeDraft=function(id){const r=_resumeDraftDesktop(id);if(isMobile())setTimeout(()=>{setMobileView('editor');const da=document.getElementById('draftArea');if(da)da.scrollIntoView({block:'start'});},0);return r;};
+// Si se genera un borrador estando en otra pantalla, avisar con un punto en "Escribir"
+const _renderDraftAreaDesktop=renderDraftArea;
+renderDraftArea=function(text){_renderDraftAreaDesktop(text);if(isMobile()&&!document.body.classList.contains('m-view-editor')){const b=document.getElementById('mNavEditor');if(b)b.classList.add('has-draft');}};
 function initApp(){
   appInitialized=true;
   checkAuth();
